@@ -57,6 +57,7 @@ const planCopy: Record<Plan, { kicker: string; description: string; features: st
       "最大64 GiB",
       "フレーム保持期限なし",
       "最大100 Study比較",
+      "Coach Workspace · 最大100 clients",
       "Bearer API access",
       "Highest-priority processing",
     ],
