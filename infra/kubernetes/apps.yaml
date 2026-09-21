@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: valostudy-config
+data:
+  BETTER_AUTH_URL: https://valostudy.example.com
+  S3_ENDPOINT: https://replace-account-id.r2.cloudflarestorage.com
+  S3_REGION: auto
+  S3_BUCKET: valostudy
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valostudy-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: valostudy-web }
+  template:
+    metadata:
+      labels: { app: valostudy-web }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      containers:
+        - name: web
+          image: ghcr.io/alexandergg-0520/valostudy-web:replace-with-commit
+          ports: [{ containerPort: 3000 }]
+          envFrom:
+            - configMapRef: { name: valostudy-config }
+            - secretRef: { name: valostudy-secrets }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 1Gi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+          readinessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+          livenessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valostudy-web
+spec:
+  selector: { app: valostudy-web }
+  ports: [{ port: 80, targetPort: 3000 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valostudy-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: valostudy-worker }
+  template:
+    metadata:
+      labels: { app: valostudy-worker }
+    spec:
+      terminationGracePeriodSeconds: 660
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
+      containers:
+        - name: worker
+          image: ghcr.io/alexandergg-0520/valostudy-worker:replace-with-commit
+          envFrom:
+            - configMapRef: { name: valostudy-config }
+            - secretRef: { name: valostudy-secrets }
+          resources:
+            requests: { cpu: "1", memory: 512Mi, ephemeral-storage: 5Gi }
+            limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 8Gi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+          volumeMounts: [{ name: scratch, mountPath: /tmp }]
+      volumes:
+        - name: scratch
+          emptyDir: { sizeLimit: 6Gi }
