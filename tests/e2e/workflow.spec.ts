@@ -208,7 +208,7 @@ for (const visibility of ["public", "private"] as const) {
     const job = await queue.getJob(id);
     expect(job?.data).toMatchObject({ studyId: id, sourceObjectKey: `studies/${id}/source`, options: { fps: 1 } });
     for (const frame of manifest.frames) {
-      ));
+      expect(frame.url).toMatch(new RegExp(`^/${id}/frames/[0-9]{6}));
       const response = await page.request.get(frame.url);
       expect(response.status()).toBe(200);
       expect(response.headers()["content-type"]).toBe("image/jpeg");
@@ -238,7 +238,7 @@ test("invalid media reaches failed in PostgreSQL and BullMQ after bounded retrie
   const manifest = await terminal(page.request, id, "failed");
   expect(manifest.frames).toEqual([]);
   expect((await persisted(id, "failed")).attempts).toBe(3);
-  expect((await page.request.get(`/${id}/frames/000001.webp`)).status()).toBe(404);
+  expect((await page.request.get(`/${id}/frames/000001.jpg`)).status()).toBe(404);
 });
 
 test("real multipart validation and concurrent completion produce exactly one job", async ({ page }) => {
