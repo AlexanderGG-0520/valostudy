@@ -7,6 +7,10 @@ import {
   MAX_EXTRACTED_FRAMES,
   MAX_VIDEO_SECONDS,
   processingOptionsSchema,
+  vcmrExtractionSchema,
+  VCMR_SCHEMA,
+  VCMR_SCHEMA_VERSION,
+  VCMR_TIMESTAMP_SEMANTICS,
   type ProcessingOptions,
 } from "@valostudy/schema";
 
@@ -188,11 +192,30 @@ export async function extract(
 
   const names = (await readdir(directory)).filter((name) => /^[0-9]{6}\.jpg$/.test(name)).sort();
   if (!names.length) throw new Error("No frames extracted");
-  return {
-    metadata,
+  return vcmrExtractionSchema.parse({
+    schema: VCMR_SCHEMA,
+    schemaVersion: VCMR_SCHEMA_VERSION,
+    media: {
+      width: metadata.width,
+      height: metadata.height,
+      durationMs: Math.round(metadata.duration * 1000),
+      sampling: {
+        fps: o.fps,
+        strategy: "fixed_rate",
+        timestampSemantics: VCMR_TIMESTAMP_SEMANTICS,
+      },
+    },
     frames: names.map((name) => ({
+      id: `frame_${name.slice(0, 6)}`,
       name,
       timestampMs: Math.round(((Number.parseInt(name.slice(0, 6), 10) - 1) / o.fps) * 1000),
+      source: {
+        kind: "fixed_rate_sampling",
+        approximateTimestamp: true,
+      },
     })),
-  };
+    rounds: [],
+    events: [],
+    annotations: [],
+  });
 }
