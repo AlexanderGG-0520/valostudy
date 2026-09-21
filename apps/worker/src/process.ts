@@ -8,7 +8,7 @@ import type { Job } from "bullmq";
 import { db, studies, jobs, uploads, frames, usageEvents, eq, and, inArray, isNull } from "@valostudy/db";
 import { PLAN_LIMITS, processingJobSchema } from "@valostudy/schema";
 import { Storage, frameKey, sourceKey } from "@valostudy/storage";
-import { config, log } from "@valostudy/config";
+import { log, workerTuning } from "@valostudy/config";
 import { extract } from "./media";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -129,7 +129,7 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
 
     stage = "persist";
     const persistStarted = Date.now();
-    const frameUploadConcurrency = config().WORKER_FRAME_UPLOAD_CONCURRENCY;
+    const frameUploadConcurrency = workerTuning().WORKER_FRAME_UPLOAD_CONCURRENCY;
     const rows: (typeof frames.$inferInsert)[] = result.frames.map((frame) => ({
       ...frame,
       studyId: id,
