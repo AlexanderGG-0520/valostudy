@@ -23,25 +23,27 @@ export function AccountPanel() {
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const [supported, setSupported] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    setSupported(typeof window !== "undefined" && "PublicKeyCredential" in window);
-  }, []);
-
-  const refreshPasskeys = useCallback(async () => {
+  const fetchPasskeys = useCallback(async () => {
     const result = await authClient.passkey.listUserPasskeys();
     if (result.error) throw new Error(result.error.message);
-    setPasskeys((result.data ?? []) as PasskeyRow[]);
+    return (result.data ?? []) as PasskeyRow[];
   }, []);
 
   useEffect(() => {
-    if (!session?.user.id) {
-      setPasskeys([]);
-      return;
-    }
-    void refreshPasskeys().catch((error) => setMessage(errorMessage(error, "パスキー一覧を取得できませんでした")));
-  }, [session?.user.id, refreshPasskeys]);
+    if (!session?.user.id) return;
+    let active = true;
+    void fetchPasskeys()
+      .then((items) => {
+        if (active) setPasskeys(items);
+      })
+      .catch((error) => {
+        if (active) setMessage(errorMessage(error, "パスキー一覧を取得できませんでした"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [session?.user.id, fetchPasskeys]);
 
   async function signInWithPasskey() {
     setBusy("signin");
@@ -61,14 +63,14 @@ export function AccountPanel() {
     setBusy("add");
     setMessage("");
     try {
-      if (supported === false) throw new Error("このブラウザはパスキーに対応していません");
+      if (!("PublicKeyCredential" in window)) throw new Error("このブラウザはパスキーに対応していません");
       const result = await authClient.passkey.addPasskey({
         name: name.trim() || undefined,
       });
       if (result.error) throw new Error(result.error.message);
       setName("");
       setMessage("パスキーを追加しました");
-      await refreshPasskeys();
+      setPasskeys(await fetchPasskeys());
     } catch (error) {
       setMessage(errorMessage(error, "パスキーの追加に失敗しました"));
     } finally {
@@ -83,7 +85,7 @@ export function AccountPanel() {
       const result = await authClient.passkey.deletePasskey({ id });
       if (result.error) throw new Error(result.error.message);
       setMessage("パスキーを削除しました");
-      await refreshPasskeys();
+      setPasskeys(await fetchPasskeys());
     } catch (error) {
       setMessage(errorMessage(error, "パスキーの削除に失敗しました"));
     } finally {
@@ -106,13 +108,13 @@ export function AccountPanel() {
       </div>
       <Button
         className="primary-button passkey-action"
-        disabled={busy !== null || supported === false}
+        disabled={busy !== null}
         onClick={() => void signInWithPasskey()}
       >
         パスキーでログイン
       </Button>
       <p className="field-hint">
-        {supported === false ? "このブラウザではWebAuthnを利用できません。" : "メールとパスワードでのログインはトップページから利用できます。"}
+        メールとパスワードでのログインはトップページから利用できます。
       </p>
       <p className="status-line" role="status">{message}</p>
     </section>;
@@ -163,7 +165,7 @@ export function AccountPanel() {
         </label>
         <Button
           className="primary-button passkey-action"
-          disabled={busy !== null || supported === false}
+          disabled={busy !== null}
           onClick={() => void addPasskey()}
         >
           この端末にパスキーを追加

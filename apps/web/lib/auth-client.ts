@@ -6,5 +6,5 @@ import type { auth } from "./auth";
 import { passkeyClient } from "@better-auth/passkey/client";
 
 export const authClient = createAuthClient({
-  plugins: [inferAdditionalFields<typeof auth>(), passkeyClient()],
+  plugins: [inferAdditionalFields<ReturnType<typeof auth>>(), passkeyClient()],
 });
