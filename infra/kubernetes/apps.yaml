@@ -56,6 +56,8 @@ kind: Deployment
 metadata:
   name: valostudy-worker
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels: { app: valostudy-worker }
