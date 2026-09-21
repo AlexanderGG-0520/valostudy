@@ -95,10 +95,7 @@ export function UploadForm() {
 
   useEffect(() => {
     let active = true;
-    if (!sessionUserId) {
-      setBilling(null);
-      return;
-    }
+    if (!sessionUserId) return;
     void fetch("/api/billing/status", { cache: "no-store" }).then(async (response) => {
       if (active && response.ok) setBilling(await response.json() as BillingStatus);
     });
