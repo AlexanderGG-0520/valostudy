@@ -10,8 +10,6 @@ updates:
       time: "09:00"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
     commit-message:
       prefix: "deps"
       include: "scope"
@@ -32,9 +30,6 @@ updates:
       time: "09:15"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "github-actions"
     commit-message:
       prefix: "ci"
       include: "scope"
@@ -52,9 +47,6 @@ updates:
       time: "09:30"
       timezone: "Asia/Tokyo"
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "docker"
     commit-message:
       prefix: "deps"
       include: "scope"
