@@ -170,7 +170,7 @@ it("runs the worker on real video and commits frames, metadata and terminal stat
     const result = await buildManifest(study.id);
     expect(result.status).toBe("completed");
     expect(result.frames.map((f) => f.timestampMs)).toEqual([0, 1000, 2000]);
-    expect(state.putFrame).toHaveBeenCalledTimes(4);
+    expect(state.putFrame).toHaveBeenCalledTimes(3);
     expect((await database.select().from(schema.uploads))[0].metadata).toEqual({ width: 320, height: 240, duration: 3 });
     expect((await database.select().from(schema.jobs))[0].status).toBe("completed");
     expect(state.delete).toHaveBeenCalledWith(`studies/${study.id}/source`);
