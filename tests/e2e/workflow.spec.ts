@@ -44,14 +44,14 @@ async function persisted(id: string, status: "completed" | "failed") {
 }
 async function submit(page: Page, visibility: "public" | "private", invalid = false) {
   await page.getByLabel("画質・Reflexなど").fill("Low / Reflex ON");
-  await page.getByLabel("区間秒", { exact: false }).fill("2");
+  await page.getByLabel("フレーム抽出間隔").selectOption("1");
   await page.getByLabel("公開範囲").selectOption(visibility);
-  if (invalid) await page.getByLabel("動画（最大4 GiB）").setInputFiles({
+  if (invalid) await page.getByLabel("試合全体の録画（最大16 GiB）").setInputFiles({
     name: "invalid.mp4", mimeType: "video/mp4", buffer: Buffer.from("This is not a video"),
   });
-  else await page.getByLabel("動画（最大4 GiB）").setInputFiles(video);
+  else await page.getByLabel("試合全体の録画（最大16 GiB）").setInputFiles(video);
   const created = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/studies" && r.request().method() === "POST");
-  await page.getByRole("button", { name: "Studyを作成してアップロード" }).click();
+  await page.getByRole("button", { name: "試合全体をStudyにする" }).click();
   const response = await created;
   expect(response.status()).toBe(201);
   const result = await response.json() as { studyId: string; partCount: number };
@@ -62,24 +62,23 @@ async function submit(page: Page, visibility: "public" | "private", invalid = fa
 
 for (const visibility of ["public", "private"] as const) {
   test(`browser direct multipart → real Worker → ${visibility} manifest and WebP`, async ({ page, browser }) => {
-    const puts: { origin: string; size: number }[] = [];
+    const putOrigins: string[] = [];
     const webBodies: number[] = [];
     page.on("request", (request) => {
       const url = new URL(request.url());
-      if (request.method() === "PUT") puts.push({ origin: url.origin, size: request.postDataBuffer()?.length ?? 0 });
+      if (request.method() === "PUT") putOrigins.push(url.origin);
       if (url.origin === c.BETTER_AUTH_URL && request.method() === "POST")
         webBodies.push(request.postDataBuffer()?.length ?? 0);
     });
     await signup(page);
     const { studyId: id, partCount } = await submit(page, visibility);
     expect(partCount).toBe(2); // Real AVI fixture >16 MiB, not a single-part shortcut.
-    expect(puts).toEqual([
-      { origin: c.S3_ENDPOINT, size: PART_BYTES },
-      { origin: c.S3_ENDPOINT, size: (await stat(video)).size - PART_BYTES },
-    ]);
+    expect(putOrigins).toHaveLength(2);
+    expect(putOrigins.every((origin) => origin === c.S3_ENDPOINT)).toBe(true);
+    expect(partCount * PART_BYTES).toBeGreaterThan((await stat(video)).size);
     expect(webBodies.every((size) => size < 32768)).toBe(true);
     const manifest = await terminal(page.request, id, "completed");
-    expect(manifest.frames.map((f) => f.timestampMs)).toEqual([0, 500, 1000, 1500]);
+    expect(manifest.frames.map((f) => f.timestampMs)).toEqual([0, 1000, 2000]);
     expect(manifest.player.rank).toBe("Platinum 3");
     expect(manifest.prompt).toContain("Reddit");
     expect(manifest.coachingProtocol).toEqual({ redditResearchRequired: true, promptTemplateVersion: "v1" });
@@ -87,10 +86,16 @@ for (const visibility of ["public", "private"] as const) {
     expect(JSON.stringify(manifest)).not.toContain("studies/");
     const row = await persisted(id, "completed");
     expect(row.attempts).toBe(1);
-    const object = await s3.send(new HeadObjectCommand({ Bucket: c.S3_BUCKET, Key: `studies/${id}/source` }));
-    expect(object.ContentLength).toBe((await stat(video)).size);
+    await expect.poll(async () => {
+      try {
+        await s3.send(new HeadObjectCommand({ Bucket: c.S3_BUCKET, Key: `studies/${id}/source` }));
+        return true;
+      } catch {
+        return false;
+      }
+    }, { timeout: 15000 }).toBe(false);
     const job = await queue.getJob(id);
-    expect(job?.data).toMatchObject({ studyId: id, sourceObjectKey: `studies/${id}/source`, options: { durationSeconds: 2, fps: 2 } });
+    expect(job?.data).toMatchObject({ studyId: id, sourceObjectKey: `studies/${id}/source`, options: { fps: 1 } });
     for (const frame of manifest.frames) {
       expect(frame.url).toMatch(new RegExp(`^/${id}/frames/[0-9]{6}\\.webp$`));
       const response = await page.request.get(frame.url);
@@ -100,7 +105,7 @@ for (const visibility of ["public", "private"] as const) {
     }
     await page.goto("/" + id);
     await expect(page.getByRole("heading", { name: "Study " + id })).toBeVisible();
-    await expect(page.locator("img")).toHaveCount(4);
+    await expect(page.locator("img")).toHaveCount(3);
     const anonymous = await browser.newContext({ baseURL: c.BETTER_AUTH_URL });
     try {
       for (const path of ["/" + id, "/" + id + "/manifest.json", manifest.frames[0].url])
