@@ -41,7 +41,7 @@ const metadataSchema = z.object({
   format: z.object({ duration: z.coerce.number().positive().max(MAX_VIDEO_SECONDS) }),
 });
 
-export async function probe(path: string) {
+export async function probe(path: string, maxVideoSeconds = MAX_VIDEO_SECONDS) {
   const output = await runProcess("ffprobe", [
     "-v", "error", ...inputOptions, "-select_streams", "v:0",
     "-show_entries", "stream=width,height:format=duration", "-of", "json", path,
@@ -49,15 +49,25 @@ export async function probe(path: string) {
   const data = metadataSchema.parse(JSON.parse(output));
   const { width, height } = data.streams[0];
   if (width * height > 3840 * 2160) throw new Error("Video exceeds 4K pixel limit");
+  if (data.format.duration > maxVideoSeconds)
+    throw new Error(`Video exceeds plan duration limit of ${maxVideoSeconds} seconds`);
   return { width, height, duration: data.format.duration };
 }
 
-export async function extract(path: string, directory: string, options: ProcessingOptions) {
+export async function extract(
+  path: string,
+  directory: string,
+  options: ProcessingOptions,
+  limits: { maxVideoSeconds: number; maxFrames: number } = {
+    maxVideoSeconds: MAX_VIDEO_SECONDS,
+    maxFrames: MAX_EXTRACTED_FRAMES,
+  },
+) {
   const o = processingOptionsSchema.parse(options);
-  const metadata = await probe(path);
+  const metadata = await probe(path, limits.maxVideoSeconds);
   const expectedFrames = Math.ceil(metadata.duration * o.fps);
-  if (expectedFrames > MAX_EXTRACTED_FRAMES)
-    throw new Error(`Full-match extraction would exceed ${MAX_EXTRACTED_FRAMES} frames; choose a lower sampling rate`);
+  if (expectedFrames > limits.maxFrames)
+    throw new Error(`Full-match extraction would exceed plan limit of ${limits.maxFrames} frames; choose a lower sampling rate`);
 
   await runProcess("ffmpeg", [
     "-nostdin", "-v", "error", "-threads", "2", ...inputOptions,
@@ -65,7 +75,7 @@ export async function extract(path: string, directory: string, options: Processi
     "-map", "0:v:0", "-an", "-sn", "-dn",
     "-vf", `fps=${o.fps},scale=w='min(1920,iw)':h=-2`,
     "-c:v", "libwebp", "-threads", "2",
-    "-frames:v", String(MAX_EXTRACTED_FRAMES),
+    "-frames:v", String(limits.maxFrames),
     "-q:v", "80", "-n", join(directory, "%06d.webp"),
   ], 30 * 60 * 1000);
 
