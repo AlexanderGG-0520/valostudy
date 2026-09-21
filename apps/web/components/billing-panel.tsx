@@ -9,6 +9,7 @@ const authClient = createAuthClient();
 
 type BillingStatus = {
   plan: Plan;
+  entitlementSource: "free" | "stripe" | "developer";
   usage: {
     used: number;
     canCreate: boolean;
@@ -144,9 +145,11 @@ export function BillingPanel() {
               ? `${currentBilling.usage.used} / 30 used · rolling 7 days`
               : currentBilling.usage.publicLimitLabel}
         </p>
-        {currentBilling.subscription?.currentPeriodEnd && <small>
-          {currentBilling.subscription.cancelAtPeriodEnd ? "終了予定" : "次回更新"}: {formatDate(currentBilling.subscription.currentPeriodEnd)}
-        </small>}
+        {currentBilling.entitlementSource === "developer"
+          ? <small>Developer entitlement · billing不要</small>
+          : currentBilling.subscription?.currentPeriodEnd && <small>
+              {currentBilling.subscription.cancelAtPeriodEnd ? "終了予定" : "次回更新"}: {formatDate(currentBilling.subscription.currentPeriodEnd)}
+            </small>}
       </div>}
     </div>
 
@@ -171,7 +174,9 @@ export function BillingPanel() {
 
           {plan === "free" ? <div className="plan-action-muted">
             {session ? (current ? "現在のプラン" : "Freeは常に利用可能") : "アカウント作成で利用可能"}
-          </div> : current ? <Button
+          </div> : currentBilling?.entitlementSource === "developer" ? <div className="plan-action-muted">
+            {current ? "Developer Pro · 課金不要" : "Developer Pro が有効"}
+          </div> : current ? (currentBilling?.subscription?.hasCustomer ? <Button
             type="button"
             className="secondary-button pricing-button"
             variant="outline"
@@ -179,7 +184,7 @@ export function BillingPanel() {
             onClick={() => void portal()}
           >
             {busy === "portal" ? "Opening…" : "支払い・解約を管理"}
-          </Button> : <Button
+          </Button> : <div className="plan-action-muted">現在のプラン</div>) : <Button
             type="button"
             className="primary-button pricing-button"
             disabled={!session || busy !== null}
