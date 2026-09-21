@@ -31,3 +31,25 @@ CREATE TABLE "api_keys" (
 );--> statement-breakpoint
 ALTER TABLE "api_keys" ADD CONSTRAINT "api_keys_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "api_keys_user_idx" ON "api_keys" USING btree ("user_id");
+
+CREATE TABLE "coach_clients" (
+  "id" text PRIMARY KEY NOT NULL,
+  "owner_id" text NOT NULL,
+  "display_name" text NOT NULL,
+  "riot_id" text,
+  "notes" text DEFAULT '' NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT "coach_client_id_format" CHECK ("coach_clients"."id" ~ '^[0-9a-f]{11}$')
+);--> statement-breakpoint
+ALTER TABLE "coach_clients" ADD CONSTRAINT "coach_clients_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "coach_clients_owner_idx" ON "coach_clients" USING btree ("owner_id","created_at");--> statement-breakpoint
+
+CREATE TABLE "study_client_assignments" (
+  "study_id" text PRIMARY KEY NOT NULL,
+  "client_id" text NOT NULL,
+  "assigned_at" timestamp with time zone DEFAULT now() NOT NULL
+);--> statement-breakpoint
+ALTER TABLE "study_client_assignments" ADD CONSTRAINT "study_client_assignments_study_id_studies_id_fk" FOREIGN KEY ("study_id") REFERENCES "public"."studies"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "study_client_assignments" ADD CONSTRAINT "study_client_assignments_client_id_coach_clients_id_fk" FOREIGN KEY ("client_id") REFERENCES "public"."coach_clients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "study_client_assignments_client_idx" ON "study_client_assignments" USING btree ("client_id","assigned_at");
+
