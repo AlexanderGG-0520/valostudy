@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { createAuthClient } from "better-auth/react";
 import { PLAN_LIMITS, studyCreationSchema, type Plan } from "@valostudy/schema";
 import { Button } from "./ui/button";
+import { authClient } from "../lib/auth-client";
 
-const authClient = createAuthClient();
 
 type BillingStatus = {
   plan: Plan;
@@ -119,6 +118,19 @@ export function UploadForm() {
       if (result.error) throw new Error(result.error.message);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "ログイン失敗");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signInWithPasskey() {
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await authClient.signIn.passkey({});
+      if (result.error) throw new Error(result.error.message);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "パスキーログインに失敗しました");
     } finally {
       setBusy(false);
     }
@@ -271,14 +283,17 @@ export function UploadForm() {
         <span className="session-label">SIGNED IN</span>
         <strong>{session.user.email}</strong>
       </div>
-      <Button
-        className="secondary-button"
-        variant="outline"
-        disabled={busy}
-        onClick={() => void authClient.signOut()}
-      >
-        ログアウト
-      </Button>
+      <div className="session-actions">
+        <a className="account-link" href="/account">マイページ</a>
+        <Button
+          className="secondary-button"
+          variant="outline"
+          disabled={busy}
+          onClick={() => void authClient.signOut()}
+        >
+          ログアウト
+        </Button>
+      </div>
     </div>
 
     <form className="study-form" onSubmit={upload}>
