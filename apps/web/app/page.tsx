@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { UploadForm } from "../components/upload-form";
 import { BillingPanel } from "../components/billing-panel";
 import { StudyLibrary } from "../components/study-library";
@@ -9,7 +10,7 @@ export default function Home() {
     <header className="hero">
       <div className="brand-row">
         <p className="brand"><span className="brand-mark">VS</span> VALOSTUDY</p>
-        <span className="brand-meta">PLAY · STUDY · REPEAT</span>
+        <div className="brand-actions">\n          <span className="brand-meta">PLAY · STUDY · REPEAT</span>\n          <Link className="account-link" href="/account">マイページ</Link>\n        </div>
       </div>
 
       <div className="hero-grid">
