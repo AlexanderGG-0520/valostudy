@@ -439,8 +439,25 @@ it("protects private frame routes, validates names, and streams only recorded fr
   expect(await response.text()).toBe("webp");
   expect(response.headers.get("content-type")).toBe("image/webp");
   expect(response.headers.get("cache-control")).toContain("no-store");
+
+  await database.insert(schema.frames).values({
+    studyId: study.id,
+    name: "000002.jpg",
+    timestampMs: 1000,
+    objectKey: "internal/jpeg-frame",
+  });
+  state.get.mockResolvedValue({
+    Body: { transformToWebStream: () => Readable.toWeb(Readable.from(Buffer.from([0xff, 0xd8, 0xff]))) },
+  });
+  const jpegResponse = await frameGET(
+    new Request(`http://localhost/${study.id}/frames/000002.jpg`),
+    { params: Promise.resolve({ id: study.id, name: "000002.jpg" }) },
+  );
+  expect(jpegResponse.status).toBe(200);
+  expect(jpegResponse.headers.get("content-type")).toBe("image/jpeg");
+
   expect((await frameGET(request, { params: Promise.resolve({ id: study.id, name: "../source" }) })).status).toBe(404);
-  expect((await frameGET(request, { params: Promise.resolve({ id: study.id, name: "000002.webp" }) })).status).toBe(404);
+  expect((await frameGET(request, { params: Promise.resolve({ id: study.id, name: "000003.webp" }) })).status).toBe(404);
 });
 it("moves failed processing out of processing and distinguishes retry from final failure", async () => {
   const study = await createStudy("owner", input);
