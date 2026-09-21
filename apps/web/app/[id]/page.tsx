@@ -4,6 +4,7 @@ import { auth } from "../../lib/auth";
 import { buildManifest } from "../../lib/studies";
 import { HttpError } from "../../lib/http";
 import { StudyProcessingRefresh } from "../../components/study-processing-refresh";
+import { ProcessingTiming } from "../../components/processing-timing";
 
 export const dynamic = "force-dynamic";
 
@@ -23,17 +24,6 @@ const phases = [
   ["persist", "R2保存"],
   ["finalize", "確定"],
 ] as const;
-
-function formatDuration(ms: number) {
-  const totalSeconds = Math.max(0, Math.round(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes >= 60) {
-    const hours = Math.floor(minutes / 60);
-    return `${hours}時間${minutes % 60}分`;
-  }
-  return minutes ? `${minutes}分${seconds.toString().padStart(2, "0")}秒` : `${seconds}秒`;
-}
 
 function phaseState(current: string | undefined, phase: string) {
   if (current === "completed") return "done";
@@ -56,10 +46,6 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
   const missingCompletedFrames = m.status === "completed" && !m.framesExpiredAt && m.frames.length === 0;
   const progress = m.processingProgress;
   const progressPercent = progress?.percent ?? 0;
-  const elapsedMs = progress?.startedAt ? Math.max(0, Date.now() - new Date(progress.startedAt).getTime()) : null;
-  const etaMs = elapsedMs !== null && progressPercent >= 10 && progressPercent < 99
-    ? Math.round((elapsedMs / progressPercent) * (100 - progressPercent))
-    : null;
   const frameProgress = progress?.totalFrames
     ? `${(progress.processedFrames ?? 0).toLocaleString()} / ${progress.totalFrames.toLocaleString()} frames`
     : null;
@@ -110,14 +96,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
       </div>
 
       <div className="processing-metrics">
-        <div>
-          <span>経過時間</span>
-          <strong>{elapsedMs === null ? "開始待ち" : formatDuration(elapsedMs)}</strong>
-        </div>
-        <div>
-          <span>残り目安</span>
-          <strong>{etaMs === null ? "計算中" : `約 ${formatDuration(etaMs)}`}</strong>
-        </div>
+        <ProcessingTiming startedAt={progress?.startedAt ?? null} percent={progressPercent} />
         <div>
           <span>フレーム</span>
           <strong>{frameProgress ?? (progress?.stage === "download" ? "動画取得中" : "算出中")}</strong>
