@@ -3,6 +3,14 @@ import { z } from "zod";
 export const studyIdSchema = z.string().regex(/^[0-9a-f]{11}$/);
 export const frameNameSchema = z.string().regex(/^[0-9]{6}\.webp$/);
 export const processingStatusSchema = z.enum(["pending", "queued", "processing", "completed", "failed"]);
+export const processingStageSchema = z.enum(["queued", "download", "extract", "persist", "finalize", "completed", "failed"]);
+export const processingProgressSchema = z.object({
+  stage: processingStageSchema,
+  percent: z.number().int().min(0).max(100),
+  processedFrames: z.number().int().nonnegative().nullable().default(null),
+  totalFrames: z.number().int().positive().nullable().default(null),
+  startedAt: z.iso.datetime().nullable().default(null),
+});
 export const planSchema = z.enum(["free", "plus", "pro"]);
 export type Plan = z.infer<typeof planSchema>;
 
@@ -139,6 +147,7 @@ export const manifestSchema = z.object({
   studyId: studyIdSchema,
   player: playerSettingsSchema,
   status: processingStatusSchema,
+  processingProgress: processingProgressSchema.nullable().default(null),
   framesExpiredAt: z.iso.datetime().nullable().default(null),
   frames: z.array(z.object({
     timestampMs: z.number().int().nonnegative(),
@@ -162,6 +171,7 @@ export const processingJobSchema = z.object({
 
 export type PlayerSettings = z.infer<typeof playerSettingsSchema>;
 export type ProcessingOptions = z.infer<typeof processingOptionsSchema>;
+export type ProcessingProgress = z.infer<typeof processingProgressSchema>;
 export type StudyCreation = z.infer<typeof studyCreationSchema>;
 export type ProcessingJob = z.infer<typeof processingJobSchema>;
 export type Manifest = z.infer<typeof manifestSchema>;
