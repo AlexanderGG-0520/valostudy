@@ -41,6 +41,16 @@ async function reconcile() {
           isNull(usageEvents.releasedAt),
         ));
       });
+      try {
+        await new Storage().delete(upload.objectKey);
+        log("source_discarded", { studyId: study.id, stage: "reconcile_failed_job" });
+      } catch (e) {
+        log("source_discard_failed", {
+          studyId: study.id,
+          stage: "reconcile_failed_job",
+          reason: e instanceof Error ? e.message : "Unknown",
+        });
+      }
     } else if (!queued) {
       await db().update(jobs).set({ status: "queued", updatedAt: new Date() })
         .where(and(eq(jobs.studyId, job.studyId), eq(jobs.status, "pending")));
