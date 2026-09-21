@@ -8,11 +8,11 @@ import type { Job } from "bullmq";
 import { db, studies, jobs, uploads, frames, usageEvents, eq, and, inArray, isNull } from "@valostudy/db";
 import { PLAN_LIMITS, processingJobSchema } from "@valostudy/schema";
 import { Storage, frameKey, sourceKey } from "@valostudy/storage";
-import { log } from "@valostudy/config";
+import { config, log } from "@valostudy/config";
 import { extract } from "./media";
 
 const DAY = 24 * 60 * 60 * 1000;
-const FRAME_UPLOAD_CONCURRENCY = 16;
+const FRAME_UPLOAD_CONCURRENCY = config().WORKER_FRAME_UPLOAD_CONCURRENCY;
 const FRAME_DB_BATCH_SIZE = 1000;
 
 async function forEachConcurrent<T>(
