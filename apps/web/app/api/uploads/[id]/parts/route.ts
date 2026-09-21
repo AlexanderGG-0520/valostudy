@@ -33,5 +33,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       Math.min(900, remaining),
     );
     return Response.json({ url }, { headers: { "Cache-Control": "no-store" } });
-  });
+  }, { operation: "upload.part_url" });
 }
