@@ -25,7 +25,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
       containers:
         - name: web
-          image: ghcr.io/alexandergg-0520/valostudy-web:e0b741af6697d60e998ff88960f735047cad8d13
+          image: ghcr.io/alexandergg-0520/valostudy-web:802eb9deb4c6be98886d35612754cb6dbfb731ec
           ports: [{ containerPort: 3000 }]
           envFrom:
             - configMapRef: { name: valostudy-config }
@@ -64,7 +64,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
       containers:
         - name: worker
-          image: ghcr.io/alexandergg-0520/valostudy-worker:e0b741af6697d60e998ff88960f735047cad8d13
+          image: ghcr.io/alexandergg-0520/valostudy-worker:802eb9deb4c6be98886d35612754cb6dbfb731ec
           envFrom:
             - configMapRef: { name: valostudy-config }
             - secretRef: { name: valostudy-secrets }
