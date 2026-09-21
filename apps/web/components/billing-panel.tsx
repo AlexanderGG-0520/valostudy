@@ -82,18 +82,46 @@ function formatDate(value: string | null) {
 
 export function BillingPanel() {
   const { data: session } = authClient.useSession();
-  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [billingResult, setBillingResult] = useState<{
+    userId: string;
+    billing: BillingStatus | null;
+    error: string;
+  } | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<Plan | "portal" | null>(null);
   const sessionUserId = session?.user.id;
-  const currentBilling = sessionUserId ? billing : null;
+  const currentResult = sessionUserId && billingResult?.userId === sessionUserId ? billingResult : null;
+  const currentBilling = currentResult?.billing ?? null;
+  const billingError = currentResult?.error ?? "";
+  const billingLoading = Boolean(sessionUserId && !currentResult);
 
   useEffect(() => {
     let active = true;
     if (!sessionUserId) return;
-    void fetch("/api/billing/status", { cache: "no-store" }).then(async (response) => {
-      if (active && response.ok) setBilling(await response.json() as BillingStatus);
-    });
+
+    void fetch("/api/billing/status", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({})) as BillingStatus & { error?: string };
+        if (!active) return;
+        if (!response.ok) {
+          setBillingResult({
+            userId: sessionUserId,
+            billing: null,
+            error: data.error ?? `Plan status unavailable (HTTP ${response.status})`,
+          });
+          return;
+        }
+        setBillingResult({ userId: sessionUserId, billing: data, error: "" });
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setBillingResult({
+          userId: sessionUserId,
+          billing: null,
+          error: error instanceof Error ? error.message : "Plan status unavailable",
+        });
+      });
+
     return () => { active = false; };
   }, [sessionUserId]);
 
@@ -135,21 +163,30 @@ export function BillingPanel() {
         <p className="section-index">PLANS & BILLING</p>
         <h2 id="plans-heading">使い方に合わせて、処理枠を広げる。</h2>
       </div>
-      {currentBilling && <div className="current-plan-summary">
+      {session && <div className="current-plan-summary" aria-live="polite">
         <span>CURRENT PLAN</span>
-        <strong>{PLAN_LIMITS[currentBilling.plan].label}</strong>
-        <p>
-          {currentBilling.plan === "free" && !currentBilling.usage.canCreate && currentBilling.usage.nextAvailableAt
-            ? `次のStudy: ${formatDate(currentBilling.usage.nextAvailableAt)}`
-            : currentBilling.plan === "plus"
-              ? `${currentBilling.usage.used} / 30 used · rolling 7 days`
-              : currentBilling.usage.publicLimitLabel}
-        </p>
-        {currentBilling.entitlementSource === "developer"
-          ? <small>Developer entitlement · billing不要</small>
-          : currentBilling.subscription?.currentPeriodEnd && <small>
-              {currentBilling.subscription.cancelAtPeriodEnd ? "終了予定" : "次回更新"}: {formatDate(currentBilling.subscription.currentPeriodEnd)}
-            </small>}
+        {currentBilling ? <>
+          <strong>{PLAN_LIMITS[currentBilling.plan].label}</strong>
+          <p>
+            {currentBilling.plan === "free" && !currentBilling.usage.canCreate && currentBilling.usage.nextAvailableAt
+              ? `次のStudy: ${formatDate(currentBilling.usage.nextAvailableAt)}`
+              : currentBilling.plan === "plus"
+                ? `${currentBilling.usage.used} / 30 used · rolling 7 days`
+                : currentBilling.usage.publicLimitLabel}
+          </p>
+          {currentBilling.entitlementSource === "developer"
+            ? <small>Developer entitlement · billing不要</small>
+            : currentBilling.subscription?.currentPeriodEnd && <small>
+                {currentBilling.subscription.cancelAtPeriodEnd ? "終了予定" : "次回更新"}: {formatDate(currentBilling.subscription.currentPeriodEnd)}
+              </small>}
+        </> : billingLoading ? <>
+          <strong>Checking…</strong>
+          <p>現在のプランを確認しています。</p>
+        </> : <>
+          <strong>Unavailable</strong>
+          <p>{billingError || "現在のプランを確認できませんでした。"}</p>
+          <small>アップグレード操作はプラン確認が復旧するまで無効です。</small>
+        </>}
       </div>}
     </div>
 
@@ -173,7 +210,13 @@ export function BillingPanel() {
           </ul>
 
           {plan === "free" ? <div className="plan-action-muted">
-            {session ? (current ? "現在のプラン" : "Freeは常に利用可能") : "アカウント作成で利用可能"}
+            {!session
+              ? "アカウント作成で利用可能"
+              : currentBilling
+                ? (current ? "現在のプラン" : "Freeは常に利用可能")
+                : billingLoading
+                  ? "プラン確認中…"
+                  : "プランを確認できません"}
           </div> : currentBilling?.entitlementSource === "developer" ? <div className="plan-action-muted">
             {current ? "Developer Pro · 課金不要" : "Developer Pro が有効"}
           </div> : current ? (currentBilling?.subscription?.hasCustomer ? <Button
@@ -187,16 +230,20 @@ export function BillingPanel() {
           </Button> : <div className="plan-action-muted">現在のプラン</div>) : <Button
             type="button"
             className="primary-button pricing-button"
-            disabled={!session || busy !== null}
+            disabled={!session || !currentBilling || busy !== null}
             onClick={() => void (currentBilling && currentBilling.plan !== "free" ? portal() : checkout(plan))}
           >
             {!session
               ? "ログイン後に選択"
-              : currentBilling && currentBilling.plan !== "free"
-                ? "Billing Portalでプラン変更"
-                : busy === plan
-                  ? "Opening Stripe…"
-                  : `${PLAN_LIMITS[plan].label}にアップグレード`}
+              : billingLoading
+                ? "プラン確認中…"
+                : billingError || !currentBilling
+                  ? "プランを確認できません"
+                  : currentBilling.plan !== "free"
+                    ? "Billing Portalでプラン変更"
+                    : busy === plan
+                      ? "Opening Stripe…"
+                      : `${PLAN_LIMITS[plan].label}にアップグレード`}
           </Button>}
         </article>;
       })}
