@@ -10,7 +10,10 @@ export default function Home() {
     <header className="hero">
       <div className="brand-row">
         <p className="brand"><span className="brand-mark">VS</span> VALOSTUDY</p>
-        <div className="brand-actions">\n          <span className="brand-meta">PLAY · STUDY · REPEAT</span>\n          <Link className="account-link" href="/account">マイページ</Link>\n        </div>
+        <div className="brand-actions">
+          <span className="brand-meta">PLAY · STUDY · REPEAT</span>
+          <Link className="account-link" href="/account">マイページ</Link>
+        </div>
       </div>
 
       <div className="hero-grid">
