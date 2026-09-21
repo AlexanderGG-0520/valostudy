@@ -24,16 +24,26 @@ export function AccountPanel() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
-  const refreshPasskeys = useCallback(async () => {
+  const fetchPasskeys = useCallback(async () => {
     const result = await authClient.passkey.listUserPasskeys();
     if (result.error) throw new Error(result.error.message);
-    setPasskeys((result.data ?? []) as PasskeyRow[]);
+    return (result.data ?? []) as PasskeyRow[];
   }, []);
 
   useEffect(() => {
     if (!session?.user.id) return;
-    void refreshPasskeys().catch((error) => setMessage(errorMessage(error, "パスキー一覧を取得できませんでした")));
-  }, [session?.user.id, refreshPasskeys]);
+    let active = true;
+    void fetchPasskeys()
+      .then((items) => {
+        if (active) setPasskeys(items);
+      })
+      .catch((error) => {
+        if (active) setMessage(errorMessage(error, "パスキー一覧を取得できませんでした"));
+      });
+    return () => {
+      active = false;
+    };
+  }, [session?.user.id, fetchPasskeys]);
 
   async function signInWithPasskey() {
     setBusy("signin");
@@ -60,7 +70,7 @@ export function AccountPanel() {
       if (result.error) throw new Error(result.error.message);
       setName("");
       setMessage("パスキーを追加しました");
-      await refreshPasskeys();
+      setPasskeys(await fetchPasskeys());
     } catch (error) {
       setMessage(errorMessage(error, "パスキーの追加に失敗しました"));
     } finally {
@@ -75,7 +85,7 @@ export function AccountPanel() {
       const result = await authClient.passkey.deletePasskey({ id });
       if (result.error) throw new Error(result.error.message);
       setMessage("パスキーを削除しました");
-      await refreshPasskeys();
+      setPasskeys(await fetchPasskeys());
     } catch (error) {
       setMessage(errorMessage(error, "パスキーの削除に失敗しました"));
     } finally {
