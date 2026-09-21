@@ -1,6 +1,6 @@
-import { apiOwner } from "../../../../../lib/api-auth";
-import { buildManifest } from "../../../../../lib/studies";
-import { handle } from "../../../../../lib/http";
+import { apiOwner } from "../../../../../../lib/api-auth";
+import { buildManifest } from "../../../../../../lib/studies";
+import { handle } from "../../../../../../lib/http";
 
 export const runtime = "nodejs";
 
