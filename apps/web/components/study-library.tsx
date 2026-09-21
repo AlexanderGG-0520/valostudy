@@ -54,9 +54,10 @@ export function StudyLibrary() {
   if (!sessionUserId || !data) return null;
 
   function toggle(id: string) {
+    const compareLimit = data?.compareLimit ?? 0;
     setSelected((current) => current.includes(id)
       ? current.filter((value) => value !== id)
-      : current.length < data.compareLimit ? [...current, id] : current);
+      : current.length < compareLimit ? [...current, id] : current);
   }
 
   async function compare() {
