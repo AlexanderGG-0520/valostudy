@@ -115,7 +115,7 @@ R2 endpointでは設定をfail-fast検証し、region=auto、32文字のAccess K
 |---|---|---|---|---|---|---|
 | Free | 1 Studyごとに6時間cooldown | 2h / 16GiB | 最大1 FPS / 7,200 frames | 30日 | 基本Study / Public・Private | Standard |
 | Plus ($20/月) | 30 Studies / rolling 7 days | 2h / 32GiB | 最大2 FPS / 14,400 frames | 1年 | 最大20 Studyの横断比較 | Priority |
-| Pro ($200/月) | UI上Unlimited（fair-use保護あり） | 4h / 64GiB | 最大5 FPS / 72,000 frames | 期限なし | 最大100 Study比較 + Bearer API | Highest |
+| Pro ($200/月) | UI上Unlimited（fair-use保護あり） | 4h / 64GiB | 最大5 FPS / 72,000 frames | 期限なし | 最大100 Study比較 + Coach Workspace（100 clients）+ Bearer API | Highest |
 
 FreeのcooldownとPlus/Proのrolling quotaは、Study作成ボタンではなくmultipart uploadが正常完了してprocessingへ投入される時点で消費します。アップロード途中の失敗では消費しません。Workerが最終的に動画を処理できなかった場合はusage eventをreleaseするため、利用枠が戻ります。同一ユーザーのcompleteはPostgreSQL row lockで直列化し、並行requestによるquota超過を防ぎます。
 
@@ -129,12 +129,20 @@ Plus / Proではログイン中のStudy Libraryからcompleted Studyを複数選
 
 Proでは最大5個のBearer API keyを発行できます。secretは発行時に一度だけ表示し、DBにはSHA-256 hashと表示用prefixだけを保存します。revoked keyやPro subscriptionが失効したkeyは認証に使えません。
 
+ProのCoach Workspaceでは最大100 clientを作成し、ownerが保持するcompleted Studyをplayer/client単位で割り当てられます。`/clients/{id}` と `/clients/{id}/manifest.json` がそのプレイヤーのlongitudinal coaching historyになり、元Studyを削除・複製せずに継続的な改善履歴としてAIへ渡せます。Client削除時は割当だけcascadeし、Study本体は残ります。
+
 ```bash
 curl -H "Authorization: Bearer vsk_..." \
   https://valostudy.example.com/api/v1/studies
 
 curl -H "Authorization: Bearer vsk_..." \
   https://valostudy.example.com/api/v1/studies/3fa91bc72de/manifest
+
+curl -H "Authorization: Bearer vsk_..." \
+  https://valostudy.example.com/api/v1/clients
+
+curl -H "Authorization: Bearer vsk_..." \
+  https://valostudy.example.com/api/v1/clients/3fa91bc72de/manifest
 ```
 
 
@@ -224,7 +232,7 @@ JSON logsにstudyId、jobId、stage、duration、frameCount、retryCount、error
 - ページ再読込後のupload再開、complete通知のUI再試行は未実装。中断multipartは4時間後に回収。
 - 作成途中のクラッシュで残るpending Study、DB未記録multipartの完全回収は未実装。frame保持期限はWorkerが処理します。元動画は正常完了または最終失敗時にWorkerが削除し、bucket lifecycleは異常終了時の補完として必要です。
 - FFmpeg専用sandbox/network policy、DB/queue readiness、アラート、queue retentionは追加対象。health endpointは生存確認のみ。
-- Proのread-only Bearer APIと長期Study比較は実装済み。高度なCV、OCR、音声解析、自動コーチングAI、adaptive sampling、coach workspace/team invite、batch uploadは未実装。
+- Proのread-only Bearer API、長期Study比較、単一アカウント向けCoach Workspaceは実装済み。高度なCV、OCR、音声解析、自動コーチングAI、adaptive sampling、team invite / multi-seat RBAC、batch uploadは未実装。
 - 旧FastAPI/SQLiteからのデータmigrationはありません。旧実装はGit commit `d8c6a13` に残っています。
 
 ## References / license
