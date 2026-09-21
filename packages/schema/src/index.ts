@@ -15,13 +15,17 @@ export const playerSettingsSchema = z.object({
   }),
   context: z.string().max(6000).default(""),
 });
-export const processingOptionsSchema = z.object({
-  startSeconds: z.number().min(0).max(28800).default(0),
-  durationSeconds: z.number().min(1).max(120).default(20),
-  fps: z.union([z.literal(0.5), z.literal(1), z.literal(2), z.literal(5)]).default(2),
-}).refine((v) => v.durationSeconds * v.fps <= 300, "Maximum 300 frames");
-export const MAX_UPLOAD_BYTES = 4 * 1024 ** 3;
+
+export const MAX_UPLOAD_BYTES = 16 * 1024 ** 3;
 export const PART_BYTES = 16 * 1024 ** 2;
+export const MAX_UPLOAD_PARTS = Math.ceil(MAX_UPLOAD_BYTES / PART_BYTES);
+export const MAX_VIDEO_SECONDS = 2 * 60 * 60;
+export const MAX_EXTRACTED_FRAMES = 3600;
+
+export const processingOptionsSchema = z.object({
+  fps: z.union([z.literal(0.25), z.literal(0.5), z.literal(1), z.literal(2)]).default(0.5),
+});
+
 export const studyCreationSchema = z.object({
   player: playerSettingsSchema,
   visibility: z.enum(["private", "public"]).default("private"),
@@ -48,7 +52,7 @@ export const manifestSchema = z.object({
   frames: z.array(z.object({
     timestampMs: z.number().int().nonnegative(),
     url: z.string().regex(/^\/[0-9a-f]{11}\/frames\/[0-9]{6}\.webp$/),
-  })).max(300),
+  })).max(MAX_EXTRACTED_FRAMES),
   timestampNote: z.literal("Sampling timeline; timestamps are approximate, not original frame PTS."),
   coachingProtocol: z.object({
     redditResearchRequired: z.literal(true), promptTemplateVersion: z.string().min(1),
