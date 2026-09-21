@@ -181,9 +181,15 @@ export function BillingPanel() {
             type="button"
             className="primary-button pricing-button"
             disabled={!session || busy !== null}
-            onClick={() => void checkout(plan)}
+            onClick={() => void (billing && billing.plan !== "free" ? portal() : checkout(plan))}
           >
-            {!session ? "ログイン後に選択" : busy === plan ? "Opening Stripe…" : `${PLAN_LIMITS[plan].label}にアップグレード`}
+            {!session
+              ? "ログイン後に選択"
+              : billing && billing.plan !== "free"
+                ? "Billing Portalでプラン変更"
+                : busy === plan
+                  ? "Opening Stripe…"
+                  : `${PLAN_LIMITS[plan].label}にアップグレード`}
           </Button>}
         </article>;
       })}
