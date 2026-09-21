@@ -87,6 +87,16 @@ it("completes multipart exactly once and persists a durable queue outbox", async
   expect(await database.select().from(schema.jobs)).toMatchObject([{ studyId: study.id, status: "pending" }]);
   expect((await readableStudy(study.id))?.status).toBe("queued");
 });
+it("enforces the Free six-hour cooldown only after upload completion and allows released usage", async () => {
+  const first = await createStudy("owner", input);
+  const second = await createStudy("owner", input);
+  state.head.mockResolvedValue({ ContentLength: input.video.size });
+  await enqueueCompletedUpload(first.id, "owner");
+  await expect(enqueueCompletedUpload(second.id, "owner")).rejects.toMatchObject({ status: 429 });
+  await database.update(schema.usageEvents).set({ releasedAt: new Date() }).where(eq(schema.usageEvents.studyId, first.id));
+  await enqueueCompletedUpload(second.id, "owner");
+  expect(await database.select().from(schema.usageEvents)).toHaveLength(2);
+});
 it("recovers from a crash after S3 completed but before PostgreSQL committed", async () => {
   const study = await createStudy("owner", input);
   state.head.mockResolvedValue({ ContentLength: input.video.size });
@@ -141,6 +151,7 @@ it("moves failed processing out of processing and distinguishes retry from final
   await expect(processVideo({ ...job, attemptsMade: 2 })).rejects.toThrow("Storage unavailable");
   expect((await readableStudy(study.id))?.status).toBe("failed");
   expect(await database.select().from(schema.jobs)).toMatchObject([{ status: "failed", attempts: 3 }]);
+  expect((await database.select().from(schema.usageEvents))[0].releasedAt).toBeInstanceOf(Date);
 });
 it("rejects an oversized remote object before downloading", async () => {
   const study = await createStudy("owner", input);
