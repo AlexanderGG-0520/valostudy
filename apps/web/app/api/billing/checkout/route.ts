@@ -2,12 +2,17 @@ import { z } from "zod";
 import { billingSubscriptions, db, eq, user } from "@valostudy/db";
 import { handle, jsonBody, owner, HttpError } from "../../../../lib/http";
 import { createCheckoutSession } from "../../../../lib/stripe";
+import { billingStatus } from "../../../../lib/billing";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   return handle(async () => {
     const userId = await owner(request);
+    const entitlement = await billingStatus(userId);
+    if (entitlement.entitlementSource === "developer")
+      throw new HttpError(409, "Developer Pro entitlement is already active and does not require billing");
+
     const { plan } = z.object({ plan: z.enum(["plus", "pro"]) }).parse(await jsonBody(request));
     const [account] = await db().select().from(user).where(eq(user.id, userId));
     if (!account) throw new HttpError(404, "Account not found");
