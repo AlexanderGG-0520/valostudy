@@ -11,6 +11,8 @@ const schema = z.object({
   REDIS_URL: z.url(),
   BETTER_AUTH_URL: z.url(),
   BETTER_AUTH_SECRET: z.string().min(32),
+  RESEND_API_KEY: z.string().min(1).optional(),
+  RESEND_FROM_EMAIL: z.string().min(3).optional(),
   S3_ENDPOINT: z.url(),
   S3_REGION: z.string().default("auto"),
   S3_BUCKET: z.string().min(1),
