@@ -148,6 +148,7 @@ export async function extract(
     await runProcess("ffmpeg", [
       "-nostdin", "-v", "error",
       "-threads", String(threadsPerProcess),
+      "-filter_threads", String(threadsPerProcess),
       ...inputOptions,
       "-ss", chunk.startSeconds.toFixed(6),
       "-i", path,
