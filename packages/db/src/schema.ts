@@ -109,6 +109,7 @@ export const usageEvents = pgTable("study_usage_events", {
   consumedAt: time("consumed_at").notNull().defaultNow(),
   releasedAt: time("released_at"),
 }, (t) => [
+  check("study_usage_plan", sql`${t.plan} in ('free','plus','pro')`),
   index("study_usage_owner_consumed_idx").on(t.ownerId, t.consumedAt),
 ]);
 
@@ -121,7 +122,9 @@ export const billingSubscriptions = pgTable("billing_subscriptions", {
   currentPeriodEnd: time("current_period_end"),
   cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
   updatedAt: time("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  check("billing_plan", sql`${t.plan} in ('free','plus','pro')`),
+]);
 
 export const stripeEvents = pgTable("stripe_events", {
   id: text("id").primaryKey(),
