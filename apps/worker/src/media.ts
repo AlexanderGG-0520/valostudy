@@ -101,54 +101,97 @@ export async function extract(
   if (expectedFrames > limits.maxFrames)
     throw new Error(`Full-match extraction would exceed plan limit of ${limits.maxFrames} frames; choose a lower sampling rate`);
 
-  // Long VODs can legitimately take longer than 30 minutes on the bounded 2-thread worker.
-  // Allow up to 2x realtime, with a 30-minute floor and 6-hour hard ceiling.
+  // Each extractor handles a disjoint, frame-aligned segment. This lets libwebp use
+  // the Pod's CPUs in parallel without reducing the source resolution.
+  const tuning = workerTuning();
+  const processCount = Math.min(tuning.WORKER_FFMPEG_PROCESSES, expectedFrames);
+  const threadsPerProcess = Math.max(1, Math.floor(tuning.WORKER_FFMPEG_THREADS / processCount));
+  const framesPerProcess = Math.ceil(expectedFrames / processCount);
+  const chunks = Array.from({ length: processCount }, (_, index) => {
+    const startFrame = index * framesPerProcess;
+    const frameCount = Math.min(framesPerProcess, expectedFrames - startFrame);
+    return {
+      index,
+      startFrame,
+      frameCount,
+      startSeconds: startFrame / o.fps,
+    };
+  }).filter((chunk) => chunk.frameCount > 0);
+
   const ffmpegTimeoutMs = Math.min(
     6 * 60 * 60 * 1000,
     Math.max(30 * 60 * 1000, Math.ceil(metadata.duration * 2 * 1000)),
   );
 
-  const threads = workerTuning().WORKER_FFMPEG_THREADS;
-  let progressBuffer = "";
+  const completedByChunk = new Array(chunks.length).fill(0);
   let lastReportedPercent = -1;
-  await runProcess("ffmpeg", [
-    "-nostdin", "-v", "error", "-threads", String(threads), ...inputOptions,
-    "-i", path,
-    "-map", "0:v:0", "-an", "-sn", "-dn",
-    "-vf", `fps=${o.fps},scale=w='min(1920,iw)':h=-2`,
-    "-c:v", "libwebp", "-threads", String(threads),
-    "-frames:v", String(limits.maxFrames),
-    "-q:v", "80",
-    "-progress", "pipe:1", "-nostats",
-    "-n", join(directory, "%06d.webp"),
-  ], ffmpegTimeoutMs, async (chunk) => {
-    progressBuffer += chunk;
-    const lines = progressBuffer.split(/\r?\n/);
-    progressBuffer = lines.pop() ?? "";
-    for (const line of lines) {
-      const separator = line.indexOf("=");
-      if (separator < 0) continue;
-      const key = line.slice(0, separator);
-      if (key !== "out_time_us") continue;
-      const microseconds = Number(line.slice(separator + 1));
-      if (!Number.isFinite(microseconds)) continue;
-      const processedSeconds = Math.max(0, microseconds / 1_000_000);
-      const percent = Math.min(100, Math.floor((processedSeconds / metadata.duration) * 100));
-      if (percent <= lastReportedPercent) continue;
-      lastReportedPercent = percent;
-      await onProgress?.({ percent, processedSeconds, durationSeconds: metadata.duration, expectedFrames });
-    }
-  });
-  if (lastReportedPercent < 100)
-    await onProgress?.({ percent: 100, processedSeconds: metadata.duration, durationSeconds: metadata.duration, expectedFrames });
+
+  const reportProgress = async (chunkIndex: number, localFrames: number) => {
+    completedByChunk[chunkIndex] = Math.max(
+      completedByChunk[chunkIndex],
+      Math.min(chunks[chunkIndex].frameCount, localFrames),
+    );
+    const processedFrames = completedByChunk.reduce((sum, value) => sum + value, 0);
+    const percent = Math.min(100, Math.floor((processedFrames / expectedFrames) * 100));
+    if (percent <= lastReportedPercent) return;
+    lastReportedPercent = percent;
+    await onProgress?.({
+      percent,
+      processedSeconds: Math.min(metadata.duration, processedFrames / o.fps),
+      durationSeconds: metadata.duration,
+      expectedFrames,
+    });
+  };
+
+  await Promise.all(chunks.map(async (chunk) => {
+    let progressBuffer = "";
+    await runProcess("ffmpeg", [
+      "-nostdin", "-v", "error",
+      "-threads", String(threadsPerProcess),
+      ...inputOptions,
+      "-ss", chunk.startSeconds.toFixed(6),
+      "-i", path,
+      "-map", "0:v:0", "-an", "-sn", "-dn",
+      "-vf", `fps=${o.fps}`,
+      "-c:v", "libwebp",
+      "-threads", String(threadsPerProcess),
+      "-compression_level", "0",
+      "-q:v", "80",
+      "-frames:v", String(chunk.frameCount),
+      "-start_number", String(chunk.startFrame + 1),
+      "-progress", "pipe:1", "-nostats",
+      "-n", join(directory, "%06d.webp"),
+    ], ffmpegTimeoutMs, async (stdoutChunk) => {
+      progressBuffer += stdoutChunk;
+      const lines = progressBuffer.split(/\r?\n/);
+      progressBuffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const separator = line.indexOf("=");
+        if (separator < 0 || line.slice(0, separator) !== "frame") continue;
+        const localFrames = Number(line.slice(separator + 1));
+        if (!Number.isFinite(localFrames)) continue;
+        await reportProgress(chunk.index, localFrames);
+      }
+    });
+    await reportProgress(chunk.index, chunk.frameCount);
+  }));
+
+  if (lastReportedPercent < 100) {
+    await onProgress?.({
+      percent: 100,
+      processedSeconds: metadata.duration,
+      durationSeconds: metadata.duration,
+      expectedFrames,
+    });
+  }
 
   const names = (await readdir(directory)).filter((name) => /^[0-9]{6}\.webp$/.test(name)).sort();
   if (!names.length) throw new Error("No frames extracted");
   return {
     metadata,
-    frames: names.map((name, i) => ({
+    frames: names.map((name) => ({
       name,
-      timestampMs: Math.round((i / o.fps) * 1000),
+      timestampMs: Math.round(((Number.parseInt(name.slice(0, 6), 10) - 1) / o.fps) * 1000),
     })),
   };
 }

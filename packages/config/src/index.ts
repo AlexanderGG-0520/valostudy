@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const workerTuningSchema = z.object({
   WORKER_FFMPEG_THREADS: z.coerce.number().int().min(1).max(32).default(2),
+  WORKER_FFMPEG_PROCESSES: z.coerce.number().int().min(1).max(8).default(1),
   WORKER_FRAME_UPLOAD_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(16),
 });
 
