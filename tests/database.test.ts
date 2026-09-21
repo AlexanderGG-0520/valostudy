@@ -50,6 +50,19 @@ beforeEach(async () => {
   state.parts.mockResolvedValue([{ PartNumber: 1, ETag: "etag", Size: input.video.size }]);
   state.complete.mockResolvedValue({});
 });
+it("enforces Free media limits and snapshots an active Plus entitlement", async () => {
+  await expect(createStudy("owner", { ...input, processing: { fps: 2 as const } }))
+    .rejects.toMatchObject({ status: 403 });
+
+  await database.insert(schema.billingSubscriptions).values({
+    userId: "owner",
+    plan: "plus",
+    status: "active",
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  });
+  const study = await createStudy("owner", { ...input, processing: { fps: 2 as const } });
+  expect(study.plan).toBe("plus");
+});
 it("migrates real SQL, creates Study + snapshot, and enforces private ownership", async () => {
   const study = await createStudy("owner", { ...input, visibility: "private" });
   expect(study.id).toMatch(/^[0-9a-f]{11}$/);
