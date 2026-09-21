@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const study = await createStudy(ownerId, input);
     return Response.json({ studyId: study.id, url: `/${study.id}`, partBytes: PART_BYTES,
       partCount: Math.ceil(input.video.size / PART_BYTES) }, { status: 201 });
-  });
+  }, { requestOperation: "study.create" });
 }
 
 
@@ -27,5 +27,5 @@ export async function GET(request: Request) {
       plan: entitlement.plan,
       compareLimit: entitlement.limits.compareLimit,
     }, { headers: { "Cache-Control": "private, no-store" } });
-  });
+  }, { requestOperation: "study.list" });
 }
