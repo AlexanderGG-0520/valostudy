@@ -66,6 +66,8 @@ describe("prompts", () => {
 describe("object storage namespace and parts", () => {
   it("generates controlled keys and rejects traversal", () => {
     expect(sourceKey(id)).toBe(`studies/${id}/source`);
+    expect(frameKey(id, "000001.jpg")).toBe(`studies/${id}/frames/000001.jpg`);
+    expect(frameKey(id, "000001.jpg")).toBe(`studies/${id}/frames/000001.jpg`);
     expect(frameKey(id, "000001.webp")).toBe(`studies/${id}/frames/000001.webp`);
     expect(() => frameKey(id, "../../secret")).toThrow();
     expect(() => sourceKey("../source")).toThrow();

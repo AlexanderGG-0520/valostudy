@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { runProcess, probe, extract } from "../apps/worker/src/media";
 
-it("probes and extracts the entire real video into full-resolution timestamped WebP frames", async () => {
+it("probes and extracts the entire real video into full-resolution 4:4:4 JPEG frames", async () => {
   const dir = await mkdtemp(join(tmpdir(), "valostudy-test-"));
   const previousProcesses = process.env.WORKER_FFMPEG_PROCESSES;
   const previousThreads = process.env.WORKER_FFMPEG_THREADS;
-  process.env.WORKER_FFMPEG_PROCESSES = "4";
+  process.env.WORKER_FFMPEG_PROCESSES = "8";
   process.env.WORKER_FFMPEG_THREADS = "8";
   try {
     const source = join(dir, "fixture.mp4");
@@ -29,15 +29,15 @@ it("probes and extracts the entire real video into full-resolution timestamped W
     expect(progress.at(-1)).toBe(100);
     expect(progress).toEqual([...progress].sort((a, b) => a - b));
     expect(result.frames.map((frame) => frame.timestampMs)).toEqual([0, 500, 1000, 1500, 2000, 2500]);
-    expect(result.frames[0].name).toBe("000001.webp");
+    expect(result.frames[0].name).toBe("000001.jpg");
     const firstFrame = join(output, result.frames[0].name);
-    expect((await readFile(firstFrame)).subarray(8, 12).toString()).toBe("WEBP");
+    expect(Array.from((await readFile(firstFrame)).subarray(0, 3))).toEqual([0xff, 0xd8, 0xff]);
     const frameMetadata = JSON.parse(await runProcess(
       "ffprobe",
-      ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "json", firstFrame],
+      ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,pix_fmt", "-of", "json", firstFrame],
       10000,
     ));
-    expect(frameMetadata.streams[0]).toMatchObject({ width: 320, height: 240 });
+    expect(frameMetadata.streams[0]).toMatchObject({ width: 320, height: 240, pix_fmt: "yuvj444p" });
 
     const bad = join(dir, "fake.mp4");
     await writeFile(bad, "not a video");

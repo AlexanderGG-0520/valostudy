@@ -32,6 +32,7 @@ import { billingStatus, currentPlan } from "../apps/web/lib/billing";
 import { createPaymentLinkCheckout, processStripeEvent } from "../apps/web/lib/stripe";
 import { runProcess } from "../apps/worker/src/media";
 import { GET as frameGET } from "../apps/web/app/[id]/frames/[name]/route";
+import { GET as frameListGET } from "../apps/web/app/[id]/frames.json/route";
 import { GET as manifestGET } from "../apps/web/app/[id]/manifest.json/route";
 import * as schema from "@valostudy/db/schema";
 import { eq } from "drizzle-orm";
@@ -340,6 +341,26 @@ it("signals public manifests as processing until frame evidence is ready", async
   expect(completed.headers.get("retry-after")).toBeNull();
   expect((await completed.json()).frames).toHaveLength(1);
 });
+it("paginates all completed Study frames without a browser preview ceiling", async () => {
+  const study = await createStudy("owner", input);
+  state.getSession.mockResolvedValue(null);
+  await database.insert(schema.frames).values([
+    { studyId: study.id, name: "000001.jpg", objectKey: "internal/1", timestampMs: 0 },
+    { studyId: study.id, name: "000002.jpg", objectKey: "internal/2", timestampMs: 1000 },
+    { studyId: study.id, name: "000003.jpg", objectKey: "internal/3", timestampMs: 2000 },
+  ]);
+  await database.update(schema.studies).set({ status: "completed" }).where(eq(schema.studies.id, study.id));
+
+  const response = await frameListGET(
+    new Request(`http://localhost/${study.id}/frames.json?offset=1&limit=1`),
+    { params: Promise.resolve({ id: study.id }) },
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    total: 3,
+    frames: [{ timestampMs: 1000, url: `/${study.id}/frames/000002.jpg` }],
+  });
+});
 it("serves a public manifest with stable prompt snapshots", async () => {
   const study = await createStudy("owner", input);
   const first = await buildManifest(study.id);
@@ -418,8 +439,25 @@ it("protects private frame routes, validates names, and streams only recorded fr
   expect(await response.text()).toBe("webp");
   expect(response.headers.get("content-type")).toBe("image/webp");
   expect(response.headers.get("cache-control")).toContain("no-store");
+
+  await database.insert(schema.frames).values({
+    studyId: study.id,
+    name: "000002.jpg",
+    timestampMs: 1000,
+    objectKey: "internal/jpeg-frame",
+  });
+  state.get.mockResolvedValue({
+    Body: { transformToWebStream: () => Readable.toWeb(Readable.from(Buffer.from([0xff, 0xd8, 0xff]))) },
+  });
+  const jpegResponse = await frameGET(
+    new Request(`http://localhost/${study.id}/frames/000002.jpg`),
+    { params: Promise.resolve({ id: study.id, name: "000002.jpg" }) },
+  );
+  expect(jpegResponse.status).toBe(200);
+  expect(jpegResponse.headers.get("content-type")).toBe("image/jpeg");
+
   expect((await frameGET(request, { params: Promise.resolve({ id: study.id, name: "../source" }) })).status).toBe(404);
-  expect((await frameGET(request, { params: Promise.resolve({ id: study.id, name: "000002.webp" }) })).status).toBe(404);
+  expect((await frameGET(request, { params: Promise.resolve({ id: study.id, name: "000003.webp" }) })).status).toBe(404);
 });
 it("moves failed processing out of processing and distinguishes retry from final failure", async () => {
   const study = await createStudy("owner", input);

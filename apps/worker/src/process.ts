@@ -141,12 +141,18 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
         totalFrames: progress.expectedFrames,
       });
     });
+    const ffmpegDurationMs = Date.now() - ffmpegStarted;
     log("frames_extracted", {
       studyId: id,
       jobId: job.id,
       stage,
-      duration: Date.now() - ffmpegStarted,
+      duration: ffmpegDurationMs,
       frameCount: result.frames.length,
+      framesPerSecond: ffmpegDurationMs > 0
+        ? Number((result.frames.length / (ffmpegDurationMs / 1000)).toFixed(2))
+        : null,
+      ffmpegProcesses: workerTuning().WORKER_FFMPEG_PROCESSES,
+      ffmpegThreads: workerTuning().WORKER_FFMPEG_THREADS,
     });
 
     stage = "persist";

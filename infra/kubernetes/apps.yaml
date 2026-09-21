@@ -10,7 +10,7 @@ data:
   STRIPE_PLUS_PAYMENT_LINK_URL: https://buy.stripe.com/5kQbJ0gR2fp9alR1ow9IQ04
   STRIPE_PRO_PAYMENT_LINK_URL: https://buy.stripe.com/cNi6oG58k1yj3Xtd7e9IQ05
   WORKER_FFMPEG_THREADS: "8"
-  WORKER_FFMPEG_PROCESSES: "4"
+  WORKER_FFMPEG_PROCESSES: "8"
   WORKER_FRAME_UPLOAD_CONCURRENCY: "32"
 ---
 apiVersion: apps/v1
@@ -28,7 +28,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
       containers:
         - name: web
-          image: ghcr.io/alexandergg-0520/valostudy-web:ec6cd1770c4754f89bf5d30d6f670daf0abde487
+          image: ghcr.io/alexandergg-0520/valostudy-web:7cccf746f7591b09fdb75da22ef3afca2d3499c7
           ports: [{ containerPort: 3000 }]
           envFrom:
             - configMapRef: { name: valostudy-config }
@@ -67,12 +67,12 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
       containers:
         - name: worker
-          image: ghcr.io/alexandergg-0520/valostudy-worker:ec6cd1770c4754f89bf5d30d6f670daf0abde487
+          image: ghcr.io/alexandergg-0520/valostudy-worker:7cccf746f7591b09fdb75da22ef3afca2d3499c7
           envFrom:
             - configMapRef: { name: valostudy-config }
             - secretRef: { name: valostudy-secrets }
           resources:
-            requests: { cpu: "4", memory: 2Gi, ephemeral-storage: 16Gi }
+            requests: { cpu: "8", memory: 4Gi, ephemeral-storage: 16Gi }
             limits: { cpu: "8", memory: 8Gi, ephemeral-storage: 140Gi }
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
           volumeMounts: [{ name: scratch, mountPath: /tmp }]

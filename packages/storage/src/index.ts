@@ -119,8 +119,9 @@ export class Storage {
   }
 
   putFrame(key: string, bytes: Uint8Array) {
+    const contentType = key.endsWith(".jpg") ? "image/jpeg" : "image/webp";
     return storageOperation("PutObject", () => this.client.send(
-      new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: bytes, ContentType: "image/webp" }),
+      new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: bytes, ContentType: contentType }),
     ));
   }
 
