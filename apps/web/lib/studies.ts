@@ -5,7 +5,9 @@ import {
 import { insertWithStudyId } from "@valostudy/db/id";
 import { template, renderSnapshot } from "@valostudy/prompts";
 import {
-  manifestSchema, studyIdSchema, PLAN_LIMITS, type Plan, type StudyCreation,
+  manifestSchema, vcmrMatchSchema, studyIdSchema, PLAN_LIMITS,
+  VCMR_SCHEMA, VCMR_SCHEMA_VERSION, VCMR_TIMESTAMP_SEMANTICS,
+  type Plan, type StudyCreation,
 } from "@valostudy/schema";
 import { Storage, sourceKey } from "@valostudy/storage";
 import { HttpError } from "./http";
@@ -74,26 +76,87 @@ export async function readableStudy(id: string, viewerId?: string) {
   return row;
 }
 
-export async function buildManifest(id: string, viewerId?: string) {
+export async function buildCanonicalMatch(id: string, viewerId?: string) {
   const study = await readableStudy(id, viewerId);
   if (!study) throw new HttpError(404, "Study not found");
-  const [snapshot] = await db().select().from(promptSnapshots).where(eq(promptSnapshots.studyId, id));
+
+  const [[snapshot], [job], [upload], rows] = await Promise.all([
+    db().select().from(promptSnapshots).where(eq(promptSnapshots.studyId, id)),
+    db().select({ progress: jobs.progress }).from(jobs).where(eq(jobs.studyId, id)),
+    db().select({ metadata: uploads.metadata }).from(uploads).where(eq(uploads.studyId, id)),
+    study.status === "completed" && !study.framesExpiredAt
+      ? db().select().from(frames).where(eq(frames.studyId, id)).orderBy(asc(frames.name))
+      : Promise.resolve([]),
+  ]);
   if (!snapshot) throw new Error("Missing prompt snapshot");
-  const [job] = await db().select({ progress: jobs.progress }).from(jobs).where(eq(jobs.studyId, id));
-  const rows = study.status === "completed" && !study.framesExpiredAt
-    ? await db().select().from(frames).where(eq(frames.studyId, id)).orderBy(asc(frames.name))
-    : [];
+
+  return vcmrMatchSchema.parse({
+    schema: VCMR_SCHEMA,
+    schemaVersion: VCMR_SCHEMA_VERSION,
+    study: {
+      id,
+      game: "valorant",
+      visibility: study.visibility,
+      status: study.status,
+      createdAt: study.createdAt.toISOString(),
+      completedAt: study.completedAt?.toISOString() ?? null,
+    },
+    player: study.player,
+    media: {
+      width: upload?.metadata?.width ?? null,
+      height: upload?.metadata?.height ?? null,
+      durationMs: upload?.metadata?.duration
+        ? Math.round(upload.metadata.duration * 1000)
+        : null,
+      sampling: {
+        fps: study.options.fps,
+        strategy: "fixed_rate",
+        timestampSemantics: VCMR_TIMESTAMP_SEMANTICS,
+      },
+    },
+    processing: {
+      progress: job?.progress ?? null,
+      framesExpiredAt: study.framesExpiredAt?.toISOString() ?? null,
+    },
+    frames: rows.map((frame) => ({
+      id: `frame_${frame.name.slice(0, 6)}`,
+      name: frame.name,
+      timestampMs: frame.timestampMs,
+      url: `/${id}/frames/${frame.name}`,
+      source: {
+        kind: "fixed_rate_sampling",
+        approximateTimestamp: true,
+      },
+    })),
+    rounds: [],
+    events: [],
+    annotations: [],
+    coaching: {
+      protocol: {
+        redditResearchRequired: true,
+        promptTemplateVersion: snapshot.templateVersion,
+      },
+      prompt: snapshot.prompt,
+    },
+  });
+}
+
+export async function buildManifest(id: string, viewerId?: string) {
+  const canonical = await buildCanonicalMatch(id, viewerId);
   return manifestSchema.parse({
     schemaVersion: 1,
-    studyId: id,
-    player: study.player,
-    status: study.status,
-    processingProgress: job?.progress ?? null,
-    framesExpiredAt: study.framesExpiredAt?.toISOString() ?? null,
-    frames: rows.map((f) => ({ timestampMs: f.timestampMs, url: `/${id}/frames/${f.name}` })),
-    timestampNote: "Sampling timeline; timestamps are approximate, not original frame PTS.",
-    coachingProtocol: { redditResearchRequired: true, promptTemplateVersion: snapshot.templateVersion },
-    prompt: snapshot.prompt,
+    studyId: canonical.study.id,
+    player: canonical.player,
+    status: canonical.study.status,
+    processingProgress: canonical.processing.progress,
+    framesExpiredAt: canonical.processing.framesExpiredAt,
+    frames: canonical.frames.map((frame) => ({
+      timestampMs: frame.timestampMs,
+      url: frame.url,
+    })),
+    timestampNote: VCMR_TIMESTAMP_SEMANTICS,
+    coachingProtocol: canonical.coaching.protocol,
+    prompt: canonical.coaching.prompt,
   });
 }
 
