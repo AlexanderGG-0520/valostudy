@@ -201,7 +201,7 @@ manifestはschemaVersion、studyId、player、frames、coachingProtocol、prompt
 7. フレームの永続化とDB更新が完了した直後に元動画objectを削除。処理が最終失敗した場合も元動画を削除。
 8. Workerが期限切れ未完了sessionをabort・削除し、BullMQのstalled/failed状態をDBへ同期。
 
-上限はplan snapshotで決まり、Freeは16GiB/2時間/1 FPS、Plusは32GiB/2時間/2 FPS、Proは64GiB/4時間/5 FPSです。録画全体を0.25/0.5/1/2/5 FPSでサンプリングし、最大frame数もplanごとに7,200/14,400/72,000枚へ制限します。Web UIの既定値は0.5 FPS（2秒ごと）。FFprobe 60秒、download 2時間、FFmpeg 30分のtimeoutです。shellを使わず検証済みの引数配列を渡します。入力はローカルのMP4/MOV、MKV/WebM、AVIに制限し、ネットワークplaylistを受け付けません。timestampMsはサンプリング時刻の目安で、厳密な元フレームPTSではありません。
+上限はplan snapshotで決まり、Freeは16GiB/2時間/1 FPS、Plusは32GiB/2時間/2 FPS、Proは64GiB/4時間/5 FPSです。録画全体を0.25/0.5/1/2/5 FPSでサンプリングし、最大frame数もplanごとに7,200/14,400/72,000枚へ制限します。Web UIの既定値は0.5 FPS（2秒ごと）。FFprobeは60秒、downloadは2時間、FFmpegは動画尺の最大2倍（最低30分・上限6時間）のtimeoutです。shellを使わず検証済みの引数配列を渡します。入力はローカルのMP4/MOV、MKV/WebM、AVIに制限し、ネットワークplaylistを受け付けません。timestampMsはサンプリング時刻の目安で、厳密な元フレームPTSではありません。
 
 Studyはpending → queued → processing → completed / failed。DB jobのpendingは投入待ちです。dispatcher再起動後に未投入・stalled jobを回収します。Queue priorityはFree/Plus/Proで段階化しています。completed frameはFree 30日、Plus 1年でWorkerがobject storageとDBから削除し、Study metadataとprompt snapshotは残します。Pro frameには自動expiryを設定しません。
 
