@@ -8,5 +8,5 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const id = studyIdSchema.parse((await context.params).id);
     await enqueueCompletedUpload(id, ownerId);
     return Response.json({ studyId: id, status: "accepted" }, { status: 202 });
-  });
+  }, { requestOperation: "upload.complete" });
 }
