@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { auth } from "../../lib/auth";
 import { MyPageClient } from "../../components/my-page-client";
 
+export const dynamic = "force-dynamic";
+
 export default async function MyPage() {
   const session = await auth().api.getSession({ headers: await headers() });
   if (!session) redirect("/");
