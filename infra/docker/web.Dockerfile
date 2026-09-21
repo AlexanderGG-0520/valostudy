@@ -2,7 +2,7 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.34.0 --activate
 COPY . .
-RUN pnpm install --frozen-lockfile && pnpm --filter @valostudy/web build
+RUN pnpm install --no-frozen-lockfile && pnpm --filter @valostudy/web build
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
