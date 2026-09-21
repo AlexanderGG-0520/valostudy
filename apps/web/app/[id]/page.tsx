@@ -31,7 +31,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
       <h1>Study {m.studyId}</h1>
       <p>
         {processing
-          ? "録画のアップロードは受理されました。Workerが試合全体からフレームを生成しています。"
+          ? "このStudyはまだフレーム生成を完了していません。Workerの処理状況を表示しています。"
           : "AI向けの完全なフレーム一覧は manifest.json にあります。このページでは確認用に最大120枚だけプレビューします。"}
       </p>
     </header>
