@@ -86,16 +86,30 @@ jobs:
           from pathlib import Path
 
           sha = os.environ["IMAGE_SHA"]
-          path = Path("infra/kubernetes/apps.yaml")
-          text = path.read_text()
 
+          apps_path = Path("infra/kubernetes/apps.yaml")
+          apps = apps_path.read_text()
           for component in ("web", "worker"):
               pattern = rf"(image:\s+ghcr\.io/alexandergg-0520/valostudy-{component}:)[^\s]+"
-              text, count = re.subn(pattern, rf"\g<1>{sha}", text)
+              apps, count = re.subn(pattern, rf"\g<1>{sha}", apps)
               if count != 1:
-                  raise SystemExit(f"expected exactly one image reference for {component}, found {count}")
+                  raise SystemExit(
+                      f"expected exactly one {component} image reference in apps.yaml, found {count}"
+                  )
+          apps_path.write_text(apps)
 
-          path.write_text(text)
+          migration_path = Path("infra/kubernetes/migration.yaml")
+          migration = migration_path.read_text()
+          migration, count = re.subn(
+              r"(image:\s+ghcr\.io/alexandergg-0520/valostudy-worker:)[^\s]+",
+              rf"\g<1>{sha}",
+              migration,
+          )
+          if count != 1:
+              raise SystemExit(
+                  f"expected exactly one worker image reference in migration.yaml, found {count}"
+              )
+          migration_path.write_text(migration)
           PY
 
       - name: Commit deployment revision
@@ -105,13 +119,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          if git diff --quiet -- infra/kubernetes/apps.yaml; then
-            echo "Deployment manifest already references $IMAGE_SHA"
+          if git diff --quiet -- infra/kubernetes/apps.yaml infra/kubernetes/migration.yaml; then
+            echo "Deployment manifests already reference $IMAGE_SHA"
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add infra/kubernetes/apps.yaml
+          git add infra/kubernetes/apps.yaml infra/kubernetes/migration.yaml
           git commit -m "chore(deploy): valostudy ${IMAGE_SHA:0:12} [skip ci]"
           git push origin HEAD:main
