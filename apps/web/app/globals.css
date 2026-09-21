@@ -1,0 +1,18 @@
+@import "tailwindcss";
+@theme inline {
+  --color-background: #f4f1e8;
+  --color-primary: #515b37;
+  --color-primary-foreground: #fff;
+  --color-input: #c9c8b9;
+  --color-muted: #e7e5da;
+}
+body { background: var(--color-background); color: #292d23; font-family: Arial, sans-serif; }
+main { max-width: 1000px; padding: 3rem 1.5rem; margin: auto; }
+h1 { font-size: 2.5rem; font-weight: 700; margin: 1rem 0; }
+h2 { font-size: 1.3rem; font-weight: 600; margin: 1.5rem 0 1rem; }
+p { margin: 0.7rem 0; }
+a { text-decoration: underline; }
+label { display: grid; gap: 0.4rem; margin: 0.7rem 0; }
+input, select, textarea { background: #fffdf7; border: 1px solid #c9c8b9; border-radius: 6px; padding: 0.6rem; width: 100%; }
+pre { background: #fffdf7; padding: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 8px; }
+section, fieldset { border: 1px solid #d5d3c5; padding: 1.3rem; border-radius: 10px; margin: 1.5rem 0; }

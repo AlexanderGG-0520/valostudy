@@ -1,0 +1,3 @@
+ALTER TABLE "video_uploads" ADD COLUMN "metadata" jsonb;--> statement-breakpoint
+ALTER TABLE "prompt_snapshots" ADD CONSTRAINT "prompt_snapshots_template_id_template_version_prompt_templates_id_version_fk" FOREIGN KEY ("template_id","template_version") REFERENCES "public"."prompt_templates"("id","version") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "processing_jobs_status_idx" ON "processing_jobs" USING btree ("status");

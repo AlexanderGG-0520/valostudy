@@ -1,0 +1,23 @@
+{
+  "name": "@valostudy/db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts",
+    "./id": "./src/id.ts"
+  },
+  "scripts": {
+    "generate": "drizzle-kit generate",
+    "migrate": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.1",
+    "postgres": "^3.4.8",
+    "@valostudy/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.9",
+    "tsx": "^4.21.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@valostudy/prompts",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@valostudy/schema": "workspace:*"
+  }
+}

@@ -1,134 +1,162 @@
-# Valostudy
+# ValoStudy
 
-VALORANTの録画をフレームに変換し、プレイヤー設定とコーチング指示を**識別URL**にまとめる、自宅サーバー向けWebアプリ。
+VALORANTの録画とプレイヤー設定からコーチング用フレームを抽出し、AIがURLで取得できるStudyページ・JSON manifestを作るSaaS基盤です。AIの自動実行は行いません。
 
-ベージュ × オリーブのワークスペース。ブラウザから動画をアップロードし、サーバーでFFmpegを実行します。Codexはサーバーに組み込まず、ネットワークアクセスを許可した手元のCodexに識別URLを渡します。
+## Architecture
 
-## できること
-
-1. MP4 / MKV / MOV / WebM / AVIをサーバーにアップロード。
-2. **抽出前にランク、DPI、ゲーム内センシ、ビデオ設定を必須入力**。eDPIも計算。
-3. 開始秒・区間・抽出間隔を設定して非同期でフレーム抽出（最大120秒、300枚）。
-4. 渡したい画像を選び、1時間 / 24時間 / 7日の識別URLを発行。
-5. URLに実際の入力値を埋め込んだプロンプトを掲載。HTMLはサーバーで生成するためJavaScriptなしで読めます。
-6. Codexはそのプロンプトに従い、**Redditの議論を調べてから**画像を確認し、根拠付きでコーチング。
-
-フレーム、プレイヤー設定、状況メモ、プロンプトをJSONマニフェストからも取得できます。URLの無効化、録画の削除、サーバー再起動後の履歴復元に対応。
-
-## 構成
-
-- Python 3.11+ / FastAPI / Uvicorn
-- SQLite（セッション、設定、キュー状態、共有URL）
-- FFmpeg / FFprobe（サーバー側のメディア処理）
-- HTML / CSS / JavaScript ES modules（APIと連携するブラウザUI、フロントエンドのビルド不要）
-
-現段階は単一オーナー・Linux・単一プロセス向けのMVPです。Dockerイメージ、Kubernetes、複数ユーザー、Codex自動実行はまだ含みません。Sitesの旧説明ページは変更していません。
-
-## 起動
-
-FFmpegとPython 3.11以降を準備してください。CachyOS / Archなら `sudo pacman -S python ffmpeg`。
-
-```bash
-git clone https://github.com/AlexanderGG-0520/valostudy.git
-cd valostudy
-python -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+```text
+Browser ── JSON / session ── Next.js control plane ── PostgreSQL
+   │                              │                      │
+   └── direct multipart PUT ── S3/R2/MinIO        durable job outbox
+                                  ▲                      │
+                                  │                 Worker dispatcher
+                                  │                      ▼
+                                  └── WebP ── Worker ← BullMQ / Valkey
+                                                │
+                                           FFprobe / FFmpeg
+AI → /{id} → /{id}/manifest.json → /{id}/frames/000001.webp
 ```
 
-以下はBashで実行します。ランダムトークンはターミナルに表示されます。ブラウザのログイン欄で使用してください。
+Next.jsは認証、DB、Study作成、uploadの署名と完了通知、閲覧を担当します。動画本体はブラウザからstorageへ直接送信します。FFmpegは独立Workerのみで実行します。完了通知でDBにjobを記録し、Worker内dispatcherが10秒ごとにBullMQへ投入するため、投入前の障害から復旧できます。
+
+## Monorepo
+
+| Path | Responsibility |
+|---|---|
+| apps/web | Next.js App Router、TypeScript、Tailwind、shadcn/ui Button、Better Auth |
+| apps/worker | BullMQ dispatcher / processor、FFprobe / FFmpeg |
+| packages/schema | Zod: Study ID、設定、入力、状態、manifest、prompt、job |
+| packages/db | PostgreSQL、Drizzle、SQL migrations、ID生成 |
+| packages/storage | S3-compatible multipart・object・frame操作 |
+| packages/prompts | versioned JSON template、snapshot rendering |
+| packages/config | environment validation、structured logs、queue接続 |
+| infra/docker, infra/kubernetes | Web / Workerの独立配置 |
+| tests | unit、route、PGlite DB integration、実FFmpegテスト |
+
+## Dependencies / setup
+
+Node.js 22以上、pnpm 10.34.0、PostgreSQL 17、Valkey 8（またはBullMQ対応Redis）、S3-compatible storage、Worker用FFmpeg/FFprobe（libwebp対応）が必要です。
 
 ```bash
-export APP_TOKEN="$(.venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-printf '%s\n' "$APP_TOKEN"
-.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --no-access-log
+corepack enable
+pnpm install --frozen-lockfile
+cp .env.example .env
+# .envの空欄とREPLACE_LOCAL_PASSWORDを設定する。
+# BETTER_AUTH_SECRETは32文字以上のランダム値。
+set -a
+source .env
+set +a
+docker compose -f infra/docker/compose.yaml up -d
+pnpm db:migrate
+pnpm dev
+# 別ターミナルでも同じ環境変数をexport:
+pnpm dev:worker
 ```
 
-`http://127.0.0.1:8000` を開きます。APP_TOKENは自分の秘密として保管してください。再起動時に同じ値を設定すれば12時間のログインセッションは維持され、変更すると既存ログインが無効になります。**APP_TOKENの変更は識別URLの失効ではありません**。URLはアプリ内で別途無効化できます。
+http://localhost:3000 で登録・ログインし、アップロード前にプレイヤー設定・抽出区間・公開範囲を入力します。デフォルトはprivate（ownerのみ）。publicを選ぶとAIがログインなしで取得できます。公開Studyのframe・設定・状況メモは誰でも閲覧できます。
 
-`.env.example` は設定例です。アプリは `.env` を自動では読みません。シェルやサービスマネージャから環境変数を渡してください。fishでは `set -x APP_TOKEN ...` を使用します。
-
-## 自宅LAN・VPNで使う
-
-Codexを実行する端末からサーバーに到達できるアドレスを `PUBLIC_BASE_URL` に指定してください。
+MinIO consoleは http://localhost:9001 。privateの `valostudy` bucketを作成し、ブラウザのPUTを許可するCORSを設定します。AWS CLIを使う例（初回のみcreate-bucket）:
 
 ```bash
-export ALLOWED_HOSTS='localhost,127.0.0.1,192.168.1.100'
-export PUBLIC_BASE_URL='http://192.168.1.100:8000'
-.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --no-access-log
+AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+  aws --endpoint-url "$S3_ENDPOINT" s3api create-bucket --bucket "$S3_BUCKET"
+AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+  aws --endpoint-url "$S3_ENDPOINT" s3api put-bucket-cors \
+  --bucket "$S3_BUCKET" --cors-configuration file://infra/docker/cors.json
 ```
 
-IPは自分のサーバーに置き換えます。端末で動くCodex CLIならLAN/VPNのアドレスを使用できます。クラウド側で動くCodexからは、あなたのPCと同じLANには通常アクセスできません。
+MinIOのバージョンがbucket CORS APIをサポートしない場合は `MINIO_API_CORS_ALLOW_ORIGIN=http://localhost:3000` を使用してください。R2では実際のWeb originのみ許可します。未完了multipartを1日後にabortするbucket lifecycleも設定してください（DB保存前のクラッシュで残ったsession回収用）。
 
-HTTPSリバースプロキシ配下ではホストを `ALLOWED_HOSTS` に追加し、`PUBLIC_BASE_URL=https://...` と `SECURE_COOKIE=true` を設定してください。プロキシは元のHostを保持し、Uvicorn側のforwarded headerは信頼するプロキシのIPだけ許可してください。アプリは同一オリジンからの操作のみ受け付けます。サブパス配信は未対応、オリジンのルートに配置してください。
+## Environment variables
 
-識別URLのキーは閲覧権限を持つため、リバースプロキシでもクエリ文字列をアクセスログへ記録しない設定にしてください。アプリ用のアクセスログは上記の `--no-access-log` で無効化しています。静的アセットはすべて同一オリジンです。
+| Variable | Purpose |
+|---|---|
+| DATABASE_URL | PostgreSQL接続URL |
+| POSTGRES_PASSWORD | 開発ComposeのDB password |
+| REDIS_URL | Valkey / Redis接続、rediss://でTLS |
+| BETTER_AUTH_URL | Webの正規origin、認証・CSRF検証に使用 |
+| BETTER_AUTH_SECRET | 32文字以上、全Web replicaで同じ秘密 |
+| S3_ENDPOINT | browserとWeb/Workerの双方から到達可能なendpoint |
+| S3_REGION | MinIO: us-east-1 / R2: auto |
+| S3_BUCKET | private bucket名 |
+| S3_ACCESS_KEY / S3_SECRET_KEY | bucket操作権限のcredential |
 
-## Codexへの渡し方
+.envはGit対象外です。CLI/Workerは.envを自動ロードしません。上記のようにexportするか、container/Kubernetesから注入してください。秘密と署名URLをアクセスログへ記録しないでください。
 
-1. アプリでフレームを抽出し、画像を選択。
-2. 「識別URLを発行」を押す。
-3. 「指示文をコピー」を押して、ネットワークアクセスが許可されたCodexへ貼り付ける。
-4. Codexがページ内のプロンプトを読み、Reddit本文をリサーチ。
-5. マニフェストの画像URLから画像を取得し、画像閲覧機能で確認してコーチング。
-
-**ネットワーク許可だけでは不十分で、Codexに画像閲覧機能とRedditへの到達手段も必要です。**このアプリがRedditをスクレイピングしたり、閲覧しただけでコーチングを開始したりするわけではありません。
-
-プロンプトテンプレートは [`app/prompts/coaching.md`](app/prompts/coaching.md)。共有URL発行時に実際のプレイヤー設定・状況メモ・抽出設定を埋め込み、生成済みの文章を保存します。テンプレートの後日変更で既存URLの指示が勝手に変わることはありません。
-
-テンプレートは以下を指示します。
-
-- Redditで関連議論を目安3件以上、本文・コメントまで確認する。
-- 日付・URL・主張・反対意見・適用条件を示す。
-- 仕様やパッチの話はRiot公式情報も確認する。
-- Reddit本文を1件も確認できなければコーチングを中断し、不足を報告する。
-- 観察事実・ユーザー申告・Redditの見解・推測を分ける。
-- 見ていない画像・聞こえない音・画面外の敵・反応速度を捏造しない。
-
-これはCodexへの必須指示を提供する設計であり、外部Codexが実際に調査を行ったことをアプリ側で強制・検証する機能ではありません。
-
-## データと制限
-
-| 設定 | 既定値 | 用途 |
-|---|---|---|
-| `APP_TOKEN` | なし・必須 | 16文字以上の秘密。管理画面ログイン |
-| `DATA_DIR` | `./data` | SQLite、元動画、JPEG |
-| `ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1]` | 接続を許可するホスト |
-| `PUBLIC_BASE_URL` | 現在のリクエストのorigin | Codexが到達できるURLの基点 |
-| `SECURE_COOKIE` | `false` | HTTPSでは`true` |
-| `MAX_UPLOAD_MB` | `4096` | 1動画のサイズ上限 |
-
-- 単一プロセス・1ワーカー。重複起動はデータフォルダのロックで拒否します。
-- 動画は8時間以内・4K相当の画素数以下。フレームは横幅最大1920pxのJPEG。
-- キューはSQLiteに保存。起動時に待機中ジョブを処理し、途中で停止した処理は失敗として表示して再実行可能にします。
-- 受信中にサイズを検査。空き容量が1GiB未満になる場合はアップロードを拒否。元動画・フレームは自動削除しません。不要になった録画はUIで削除してください。
-- FFmpegタイムアウト300秒、FFprobe30秒、アップロード30分。切断やサイズ超過時の中途ファイルは削除。
-- 時刻は抽出設定から算出した目安で、元フレームの厳密なタイムスタンプではありません。音声解析なし。
-- 共有URLは選択したフレームと設定だけに有効。ログインCookieは不要。キーはDBにハッシュで保存し、再表示しません。
-- 再抽出または録画削除で、その録画の既存識別URLはすべて無効になります。
-- ブラウザで動画再生できるかはコーデックに依存。抽出はサーバー側で実行します。
-
-認証と期限付きURLはありますが、不特定多数を受け入れる公開SaaS向けの隔離・ユーザー管理は未実装です。まずは自分用のLAN/VPNで運用する範囲を想定しています。
-
-## テスト
+## Commands / tests
 
 ```bash
-.venv/bin/python -m pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q
-node --check app/static/app.js
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm --filter @valostudy/web start
+pnpm --filter @valostudy/worker start
+pnpm db:generate
+pnpm db:migrate
 ```
 
-FFmpegで生成した実動画をアップロードし、抽出・プロンプトへの設定反映・共有画像・認証・期限切れ・失効・再起動からの復元を検証します。CodexやRedditへ実際に接続するテストは行いません。
+テストはservice・credential不要、FFmpeg/FFprobeは必須です。PGliteで実SQL migrationとDB制約、認可、upload再実行を検証します。本番PostgreSQL / R2 / Valkeyを組み合わせたend-to-end検証は別途必要です。GitHub Actionsもinstall・lint・typecheck・test・buildを実行します。
 
-## 次の段階：Docker
+## Study / manifest URL
 
-`DATA_DIR` を永続ボリュームとしてマウントし、FFmpegを同梱した非rootのイメージにできます。現時点ではDockerfileは作成していません。詳細は [`docs/architecture.md`](docs/architecture.md)。
+Study IDは `crypto.randomBytes(6)` から作る11文字lowercase hex（44bit）、正規表現は `^[0-9a-f]{11}$`。DBのPRIMARY KEYとCHECKで保証し、衝突は最大8回まで再生成します。IDは認証tokenではありません。
 
-## 参考資料
+- Study: `https://valostudy.example.com/3fa91bc72de`
+- Manifest: `/3fa91bc72de/manifest.json`
+- Frame: `/3fa91bc72de/frames/000001.webp`
 
-- [FastAPI: Requestを直接使用する](https://fastapi.tiangolo.com/advanced/using-request-directly/)
-- [FFmpeg: fpsフィルター](https://ffmpeg.org/ffmpeg-filters.html#fps-1)
-- [Codex: 画像入力](https://learn.chatgpt.com/docs/image-inputs)
+manifestはschemaVersion、studyId、player、frames、coachingProtocol、promptを含むZod schemaで管理します。内部object keyを含めません。frame routeがowner/public認可後にWebPだけを配信します。元動画をWeb経由で配信するrouteはありません。private取得にはowner cookieが必要です。
 
-## ライセンス
+## Storage / queue / processing
 
-既存のGPL-3.0ライセンスを維持しています。[LICENSE](LICENSE) を参照してください。
+1. `POST /api/studies` に小さなJSONを送信。Study、設定、prompt snapshot、1時間のmultipart sessionを作成。
+2. `POST /api/uploads/{id}/parts` でpartNumberを指定。最大15分かつsession期限内の署名URLを取得。
+3. Browserから16MiB単位で直接PUT。最後のpartのみ小さくなります。署名は想定Content-Lengthを含み、各part最大3回試行します。
+4. `POST /api/uploads/{id}/complete` がListPartsの枚数・番号・サイズと完成objectのHEADサイズを検査。row lockで直列化し、再送は冪等。
+5. 同一DB transactionで永続jobを作成。dispatcherがstable job IDでBullMQへ投入。最大3回の試行とexponential backoff。
+6. Workerがstream download、FFprobe検証、FFmpeg抽出、WebP保存、動画/frame metadataとDB状態更新を実行。
+7. Workerが期限切れ未完了sessionをabort・削除し、BullMQのstalled/failed状態をDBへ同期。
+
+最大4GiB・8時間・4K相当。抽出は最大120秒・300枚。FFprobe 30秒、download 300秒、FFmpeg 300秒のtimeoutです。shellを使わず検証済みの引数配列を渡します。入力はローカルのMP4/MOV、MKV/WebM、AVIに制限し、ネットワークplaylistを受け付けません。timestampMsはサンプリング時刻の目安で、厳密な元フレームPTSではありません。
+
+Studyはpending → queued → processing → completed / failed。DB jobのpendingは投入待ちです。dispatcher再起動後に未投入・stalled jobを回収します。completed/failedのBullMQ jobは自動削除しません。保持ポリシーは運用で追加してください。
+
+## Prompt snapshots / Reddit research
+
+`packages/prompts/src/v1.json` はid、version、systemPrompt、researchPrompt、coachingPrompt、createdAtを保持します。DBに同versionがあれば上書きしません。Study作成時に保存済みtemplateをrenderしてsnapshotを保存し、後の閲覧や再試行では再生成しません。変更は新versionにしてください。
+
+コーチング開始前に現在のVALORANT subredditのReddit本文・コメントを調べ、出典・投稿日・patch・metaを確認する指示を含みます。Redditはground truthではなく、古い議論の適用範囲を確認し、最終判断では動画・frame evidenceを優先します。アプリ自身のReddit取得やAIの遵守検証はありません。
+
+## Docker / Kubernetes
+
+```bash
+docker build -f infra/docker/web.Dockerfile -t valostudy-web .
+docker build -f infra/docker/worker.Dockerfile -t valostudy-worker .
+```
+
+WebはNext standalone、WorkerはFFmpeg入りNode image。Workerはworkspace TypeScript exportsをtsxで解決します。migrationを1回実行してからそれぞれ起動します。
+
+`infra/kubernetes/apps.yaml` のimage、origin、storageを置換し、別途Secret `valostudy-secrets` にDATABASE_URL、REDIS_URL、BETTER_AUTH_SECRET、S3_ACCESS_KEY、S3_SECRET_KEYを設定します。秘密の実値はmanifestにありません。TLS Ingress・PostgreSQL・Valkey・storageは別途用意してください。Web/Workerは独立scale可能、Workerは1podあたりconcurrency=1で一時storageが必要です。
+
+## Observability / current limitations
+
+JSON logsにstudyId、jobId、stage、duration、frameCount、retryCount、error reasonを付与します。OpenTelemetry、Prometheus、Grafana、Lokiのexporter/dashboardは未実装です。
+
+- Better Authのemail/password登録・ログインとowner認可を実装。email verification、password reset、OAuth、MFA、分散rate limitは未実装。
+- account quota、使用量制限、WAF、storage lifecycleの自動設定は未実装。
+- 公開範囲変更、削除UI、失効・期限付き共有、frame選択、再処理UI、Study一覧は未実装。
+- ページ再読込後のupload再開、complete通知のUI再試行は未実装。中断multipartは1時間後に回収。
+- 作成途中のクラッシュで残るpending Study、DB未記録multipartの完全回収、完成動画・frameの保持期限は未実装。bucket lifecycleで補完が必要。
+- FFmpeg専用sandbox/network policy、DB/queue readiness、アラート、queue retentionは追加対象。health endpointは生存確認のみ。
+- 高度なCV、OCR、音声解析、自動コーチングAI、billingは未実装。
+- 旧FastAPI/SQLiteからのデータmigrationはありません。旧実装はGit commit `d8c6a13` に残っています。
+
+## References / license
+
+[Next.js installation](https://nextjs.org/docs/app/getting-started/installation) /
+[Better Auth Drizzle adapter](https://www.better-auth.com/docs/adapters/drizzle) /
+[BullMQ retries](https://docs.bullmq.io/guide/retrying-failing-jobs) /
+[BullMQ stalled jobs](https://docs.bullmq.io/guide/jobs/stalled)
+
+既存のGPL-3.0 [LICENSE](LICENSE)を維持しています。
