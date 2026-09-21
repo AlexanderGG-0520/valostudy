@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { authClient } from "../lib/auth-client";
 import { Button } from "./ui/button";
 import type { Plan } from "@valostudy/schema";
@@ -37,7 +37,7 @@ export function MyPageClient() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  async function refresh() {
     const [passkeyResult, billingResponse] = await Promise.all([
       authClient.passkey.listUserPasskeys(),
       fetch("/api/billing/status", { cache: "no-store" }),
@@ -48,11 +48,21 @@ export function MyPageClient() {
       setPasskeys((passkeyResult.data ?? []) as PasskeyRow[]);
     }
     if (billingResponse.ok) setPlan(await billingResponse.json() as BillingStatus);
-  }, []);
+  }
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    let active = true;
+    void Promise.all([
+      authClient.passkey.listUserPasskeys(),
+      fetch("/api/billing/status", { cache: "no-store" }),
+    ]).then(async ([passkeyResult, billingResponse]) => {
+      if (!active) return;
+      if (passkeyResult.error) setMessage(passkeyResult.error.message);
+      else setPasskeys((passkeyResult.data ?? []) as PasskeyRow[]);
+      if (billingResponse.ok) setPlan(await billingResponse.json() as BillingStatus);
+    });
+    return () => { active = false; };
+  }, []);
 
   async function addPasskey() {
     setBusy(true);
@@ -64,7 +74,7 @@ export function MyPageClient() {
       if (result.error) throw new Error(result.error.message);
       setName("");
       setMessage("パスキーを追加しました。");
-      await load();
+      await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "パスキーを追加できませんでした");
     } finally {
@@ -79,7 +89,7 @@ export function MyPageClient() {
       const result = await authClient.passkey.deletePasskey({ id });
       if (result.error) throw new Error(result.error.message);
       setMessage("パスキーを削除しました。");
-      await load();
+      await refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "パスキーを削除できませんでした");
     } finally {
