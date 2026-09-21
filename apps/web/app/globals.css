@@ -1241,3 +1241,84 @@ input[type="file"]::file-selector-button {
     grid-column: 2;
   }
 }
+
+
+.workspace-section {
+  margin: 26px 0 0;
+  padding: 34px;
+  border: 1px solid rgba(112, 99, 79, 0.22);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 100% 0, rgba(124, 139, 108, 0.13), transparent 24rem),
+    linear-gradient(145deg, rgba(255, 252, 246, 0.94), rgba(246, 240, 230, 0.86));
+  box-shadow: var(--shadow);
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.client-create-card,
+.client-assign-card {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 250, 241, 0.6);
+}
+
+.client-create-card h3,
+.client-assign-card h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.client-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.client-list > article {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 13px 14px;
+  border: 1px solid rgba(112, 99, 79, 0.17);
+  border-radius: 14px;
+  background: rgba(255, 252, 246, 0.58);
+}
+
+.client-list a {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  text-decoration: none;
+}
+
+.client-list a:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.client-list strong {
+  font-size: 0.86rem;
+}
+
+.client-list span {
+  color: var(--muted-ink);
+  font-size: 0.74rem;
+}
+
+@media (max-width: 760px) {
+  .workspace-section {
+    padding: 24px 18px;
+  }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
