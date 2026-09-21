@@ -42,6 +42,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     if (e instanceof HttpError && e.status === 404) notFound();
     throw e;
   });
+  const initialFrames = m.frames.slice(0, 120);
   const processing = m.status === "pending" || m.status === "queued" || m.status === "processing";
   const missingCompletedFrames = m.status === "completed" && !m.framesExpiredAt && m.frames.length === 0;
   const progress = m.processingProgress;
@@ -156,7 +157,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
         <p>{m.frames.length.toLocaleString()} frames · {m.timestampNote}</p>
       </div>
 
-      <FrameGallery frames={m.frames} />
+      <FrameGallery studyId={id} initialFrames={initialFrames} totalFrames={m.frames.length} />
     </>}
   </main>;
 }
