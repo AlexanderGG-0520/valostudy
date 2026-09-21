@@ -28,18 +28,21 @@ function paidPlanActive(status: string, currentPeriodEnd: Date | null, now: Date
 }
 
 async function resolveEntitlement(userId: string, now: Date) {
-  const [[account], [subscription]] = await Promise.all([
-    db().select({ email: user.email }).from(user).where(eq(user.id, userId)),
-    db().select().from(billingSubscriptions).where(eq(billingSubscriptions.userId, userId)),
-  ]);
+  const [account] = await db().select({ email: user.email }).from(user).where(eq(user.id, userId));
 
+  // Developer entitlement is authoritative and must not depend on Stripe state.
+  // Evaluate it before reading billing_subscriptions so the override still resolves
+  // while billing infrastructure is being migrated or recovered.
   if (account && DEVELOPER_PRO_EMAIL_HASHES.has(emailHash(account.email))) {
     return {
       plan: "pro" as const,
       entitlementSource: "developer" as const,
-      subscription,
+      subscription: null,
     };
   }
+
+  const [subscription] = await db().select().from(billingSubscriptions)
+    .where(eq(billingSubscriptions.userId, userId));
 
   if (subscription && subscription.plan !== "free"
     && paidPlanActive(subscription.status, subscription.currentPeriodEnd, now)) {
