@@ -101,8 +101,8 @@ export async function extract(
   if (expectedFrames > limits.maxFrames)
     throw new Error(`Full-match extraction would exceed plan limit of ${limits.maxFrames} frames; choose a lower sampling rate`);
 
-  // Each extractor handles a disjoint, frame-aligned segment. This lets libwebp use
-  // the Pod's CPUs in parallel without reducing the source resolution.
+  // Each extractor handles a disjoint, frame-aligned segment. JPEG encoding is
+  // deliberately full-resolution and 4:4:4 to preserve crosshair/HUD detail.
   const tuning = workerTuning();
   const processCount = Math.min(tuning.WORKER_FFMPEG_PROCESSES, expectedFrames);
   const threadsPerProcess = Math.max(1, Math.floor(tuning.WORKER_FFMPEG_THREADS / processCount));
@@ -154,14 +154,14 @@ export async function extract(
       "-i", path,
       "-map", "0:v:0", "-an", "-sn", "-dn",
       "-vf", `fps=${o.fps}`,
-      "-c:v", "libwebp",
+      "-c:v", "mjpeg",
       "-threads", String(threadsPerProcess),
-      "-compression_level", "0",
-      "-q:v", "80",
+      "-pix_fmt", "yuvj444p",
+      "-q:v", "2",
       "-frames:v", String(chunk.frameCount),
       "-start_number", String(chunk.startFrame + 1),
       "-progress", "pipe:1", "-nostats",
-      "-n", join(directory, "%06d.webp"),
+      "-n", join(directory, "%06d.jpg"),
     ], ffmpegTimeoutMs, async (stdoutChunk) => {
       progressBuffer += stdoutChunk;
       const lines = progressBuffer.split(/\r?\n/);
@@ -186,7 +186,7 @@ export async function extract(
     });
   }
 
-  const names = (await readdir(directory)).filter((name) => /^[0-9]{6}\.webp$/.test(name)).sort();
+  const names = (await readdir(directory)).filter((name) => /^[0-9]{6}\.jpg$/.test(name)).sort();
   if (!names.length) throw new Error("No frames extracted");
   return {
     metadata,
