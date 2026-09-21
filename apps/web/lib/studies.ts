@@ -9,13 +9,19 @@ import {
 } from "@valostudy/schema";
 import { Storage, sourceKey } from "@valostudy/storage";
 import { HttpError } from "./http";
-import { assertPlanInput, currentPlan } from "./billing";
+import { assertPlanInput, billingStatus } from "./billing";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
 export async function createStudy(ownerId: string, input: StudyCreation) {
-  const plan = await currentPlan(ownerId);
+  const entitlement = await billingStatus(ownerId);
+  const plan = entitlement.plan;
+  if (!entitlement.usage.canCreate) {
+    throw new HttpError(429, entitlement.usage.nextAvailableAt
+      ? `Study limit active until ${entitlement.usage.nextAvailableAt}`
+      : "Study limit reached");
+  }
   assertPlanInput(plan, input);
 
   const result = await db().transaction(async (tx) => {
