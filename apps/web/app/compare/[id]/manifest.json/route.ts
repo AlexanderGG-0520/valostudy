@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
-import { auth } from "../../../../../lib/auth";
-import { buildComparisonManifest } from "../../../../../lib/comparisons";
-import { handle } from "../../../../../lib/http";
+import { auth } from "../../../../lib/auth";
+import { buildComparisonManifest } from "../../../../lib/comparisons";
+import { handle } from "../../../../lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
