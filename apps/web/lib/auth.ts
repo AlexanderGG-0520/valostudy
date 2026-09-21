@@ -4,7 +4,7 @@ import { passkey as passkeyPlugin } from "@better-auth/passkey";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db, user, session, account, verification, passkey } from "@valostudy/db";
 import { config } from "@valostudy/config";
-import { assertEmailConfiguration, sendVerificationEmailDetached } from "./email";
+import { assertEmailConfiguration, sendVerificationEmail } from "./email";
 
 const LEGAL_VERSION = "2026-09-22";
 
@@ -57,7 +57,7 @@ function createAuth() {
     },
     emailVerification: {
       sendVerificationEmail: async ({ user, url }) => {
-        sendVerificationEmailDetached(user.email, url);
+        await sendVerificationEmail(user.email, url);
       },
       sendOnSignUp: requireEmailVerification,
       sendOnSignIn: requireEmailVerification,
