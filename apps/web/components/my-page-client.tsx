@@ -43,7 +43,7 @@ export function MyPageClient() {
       fetch("/api/billing/status", { cache: "no-store" }),
     ]);
     if (passkeyResult.error) {
-      setMessage(passkeyResult.error.message);
+      setMessage(passkeyResult.error.message ?? "パスキー情報を取得できませんでした");
     } else {
       setPasskeys((passkeyResult.data ?? []) as PasskeyRow[]);
     }
@@ -57,7 +57,7 @@ export function MyPageClient() {
       fetch("/api/billing/status", { cache: "no-store" }),
     ]).then(async ([passkeyResult, billingResponse]) => {
       if (!active) return;
-      if (passkeyResult.error) setMessage(passkeyResult.error.message);
+      if (passkeyResult.error) setMessage(passkeyResult.error.message ?? "パスキー情報を取得できませんでした");
       else setPasskeys((passkeyResult.data ?? []) as PasskeyRow[]);
       if (billingResponse.ok) setPlan(await billingResponse.json() as BillingStatus);
     });
