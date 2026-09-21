@@ -123,6 +123,8 @@ Stripe Checkoutは `POST /api/billing/checkout`、Customer Portalは `POST /api/
 
 Stripe DashboardではPlus/Proのrecurring Priceを作成して上記Price IDを設定し、Webhook endpointへ `checkout.session.completed` と `customer.subscription.*` を送信してください。Customer Portalでsubscription cancellationとPlus/Pro間のplan changeを許可してください。既にpaid subscriptionがあるユーザーのplan変更は二重subscription防止のためCheckoutではなくPortalへ送ります。
 
+開発者アカウントにはserver-sideのbuilt-in Pro entitlementを適用できます。対象emailは正規化後のSHA-256で照合するため、plaintextの開発者emailはrepositoryへ保存しません。Developer entitlementはStripe Checkoutを要求せず、通常のPro制限・Coach Workspace・Bearer API権限をそのまま使用します。
+
 ### Paid analysis features
 
 Plus / Proではログイン中のStudy Libraryからcompleted Studyを複数選択してcomparisonを作成できます。Plusは最大20件、Proは最大100件です。comparisonは `/compare/{id}` と `/compare/{id}/manifest.json` を持ち、AIへ複数試合を1つの長期 evidence setとして渡せます。public comparisonはpublic Studyだけから作成でき、private comparisonはowner sessionが必要です。
