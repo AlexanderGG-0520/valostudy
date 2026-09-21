@@ -23,11 +23,6 @@ export function AccountPanel() {
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const [supported, setSupported] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    setSupported(typeof window !== "undefined" && "PublicKeyCredential" in window);
-  }, []);
 
   const refreshPasskeys = useCallback(async () => {
     const result = await authClient.passkey.listUserPasskeys();
@@ -36,10 +31,7 @@ export function AccountPanel() {
   }, []);
 
   useEffect(() => {
-    if (!session?.user.id) {
-      setPasskeys([]);
-      return;
-    }
+    if (!session?.user.id) return;
     void refreshPasskeys().catch((error) => setMessage(errorMessage(error, "パスキー一覧を取得できませんでした")));
   }, [session?.user.id, refreshPasskeys]);
 
@@ -61,7 +53,7 @@ export function AccountPanel() {
     setBusy("add");
     setMessage("");
     try {
-      if (supported === false) throw new Error("このブラウザはパスキーに対応していません");
+      if (!("PublicKeyCredential" in window)) throw new Error("このブラウザはパスキーに対応していません");
       const result = await authClient.passkey.addPasskey({
         name: name.trim() || undefined,
       });
@@ -106,13 +98,13 @@ export function AccountPanel() {
       </div>
       <Button
         className="primary-button passkey-action"
-        disabled={busy !== null || supported === false}
+        disabled={busy !== null}
         onClick={() => void signInWithPasskey()}
       >
         パスキーでログイン
       </Button>
       <p className="field-hint">
-        {supported === false ? "このブラウザではWebAuthnを利用できません。" : "メールとパスワードでのログインはトップページから利用できます。"}
+        メールとパスワードでのログインはトップページから利用できます。
       </p>
       <p className="status-line" role="status">{message}</p>
     </section>;
@@ -163,7 +155,7 @@ export function AccountPanel() {
         </label>
         <Button
           className="primary-button passkey-action"
-          disabled={busy !== null || supported === false}
+          disabled={busy !== null}
           onClick={() => void addPasskey()}
         >
           この端末にパスキーを追加
