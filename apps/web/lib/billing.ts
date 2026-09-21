@@ -46,6 +46,7 @@ export async function billingStatus(userId: string, now = new Date()) {
   if (plan === "free") {
     const [last] = await db().select().from(usageEvents).where(and(
       eq(usageEvents.ownerId, userId),
+      eq(usageEvents.plan, plan),
       isNull(usageEvents.releasedAt),
     )).orderBy(desc(usageEvents.consumedAt)).limit(1);
     if (last) {
@@ -59,6 +60,7 @@ export async function billingStatus(userId: string, now = new Date()) {
     const windowStart = new Date(now.getTime() - limits.rollingWindowDays! * DAY);
     const recent = await db().select().from(usageEvents).where(and(
       eq(usageEvents.ownerId, userId),
+      eq(usageEvents.plan, plan),
       isNull(usageEvents.releasedAt),
       gte(usageEvents.consumedAt, windowStart),
     )).orderBy(usageEvents.consumedAt);
