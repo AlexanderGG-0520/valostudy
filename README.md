@@ -79,11 +79,13 @@ MinIOのバージョンがbucket CORS APIをサポートしない場合は `MINI
 | S3_ENDPOINT | browserとWeb/Workerの双方から到達可能なendpoint |
 | S3_REGION | MinIO: us-east-1 / R2: auto |
 | S3_BUCKET | private bucket名 |
-| S3_ACCESS_KEY / S3_SECRET_KEY | bucket操作権限のcredential |
+| S3_ACCESS_KEY / S3_SECRET_KEY | S3互換credential。R2ではManage R2 API tokensが表示するAccess Key ID / Secret Access Keyを使用（一般API token値は不可） |
 | STRIPE_SECRET_KEY | Stripe server secret key |
 | STRIPE_WEBHOOK_SECRET | `/api/billing/webhook` の署名検証secret |
 | STRIPE_PLUS_PRICE_ID | $20/月 Plus recurring Price ID |
 | STRIPE_PRO_PRICE_ID | $200/月 Pro recurring Price ID |
+
+R2 endpointでは設定をfail-fast検証し、region=auto、32文字のAccess Key ID、64文字のSecret Access Key以外は外部リクエスト前に拒否します。
 
 .envはGit対象外です。CLI/Workerは.envを自動ロードしません。上記のようにexportするか、container/Kubernetesから注入してください。秘密と署名URLをアクセスログへ記録しないでください。
 
