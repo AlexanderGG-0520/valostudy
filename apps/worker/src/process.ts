@@ -159,8 +159,9 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
     const persistStarted = Date.now();
     const frameUploadConcurrency = workerTuning().WORKER_FRAME_UPLOAD_CONCURRENCY;
     const rows: (typeof frames.$inferInsert)[] = result.frames.map((frame) => ({
-      ...frame,
       studyId: id,
+      name: frame.name,
+      timestampMs: frame.timestampMs,
       objectKey: frameKey(id, frame.name),
     }));
 
@@ -202,7 +203,13 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
       for (let offset = 0; offset < rows.length; offset += FRAME_DB_BATCH_SIZE) {
         await tx.insert(frames).values(rows.slice(offset, offset + FRAME_DB_BATCH_SIZE));
       }
-      await tx.update(uploads).set({ metadata: result.metadata }).where(eq(uploads.studyId, id));
+      await tx.update(uploads).set({
+        metadata: {
+          width: result.media.width,
+          height: result.media.height,
+          duration: result.media.durationMs / 1000,
+        },
+      }).where(eq(uploads.studyId, id));
       await tx.update(studies).set({
         status: "completed",
         completedAt,
