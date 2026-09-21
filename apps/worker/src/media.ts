@@ -17,22 +17,47 @@ const inputOptions = [
   "-analyzeduration", "10000000",
 ];
 
-export function runProcess(binary: string, args: string[], timeoutMs: number): Promise<string> {
+export function runProcess(
+  binary: string,
+  args: string[],
+  timeoutMs: number,
+  onStdout?: (chunk: string) => void | Promise<void>,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(binary, args, { shell: false, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "", timedOut = false, tooLarge = false;
+    let handlerError: unknown;
+    let handlerChain = Promise.resolve();
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
     child.stdout.on("data", (chunk: Buffer) => {
-      if (stdout.length + chunk.length > 1024 * 1024) { tooLarge = true; child.kill("SIGKILL"); }
-      else stdout += chunk.toString();
+      const text = chunk.toString();
+      if (onStdout) {
+        handlerChain = handlerChain
+          .then(async () => {
+            if (handlerError) return;
+            await onStdout(text);
+          })
+          .catch((error) => {
+            handlerError = error;
+            child.kill("SIGKILL");
+          });
+      } else if (stdout.length + chunk.length > 1024 * 1024) {
+        tooLarge = true;
+        child.kill("SIGKILL");
+      } else {
+        stdout += text;
+      }
     });
     child.stderr.on("data", (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-8192); });
     child.on("error", (error) => { clearTimeout(timer); reject(error); });
     child.on("close", (code) => {
       clearTimeout(timer);
-      if (timedOut || tooLarge || code !== 0)
-        reject(new Error(`${binary} failed (code=${code}, timeout=${timedOut}, outputLimit=${tooLarge}): ${stderr}`));
-      else resolve(stdout);
+      void handlerChain.then(() => {
+        if (handlerError) reject(handlerError);
+        else if (timedOut || tooLarge || code !== 0)
+          reject(new Error(`${binary} failed (code=${code}, timeout=${timedOut}, outputLimit=${tooLarge}): ${stderr}`));
+        else resolve(stdout);
+      });
     });
   });
 }
@@ -63,6 +88,12 @@ export async function extract(
     maxVideoSeconds: MAX_VIDEO_SECONDS,
     maxFrames: MAX_EXTRACTED_FRAMES,
   },
+  onProgress?: (progress: {
+    percent: number;
+    processedSeconds: number;
+    durationSeconds: number;
+    expectedFrames: number;
+  }) => void | Promise<void>,
 ) {
   const o = processingOptionsSchema.parse(options);
   const metadata = await probe(path, limits.maxVideoSeconds);
@@ -78,6 +109,8 @@ export async function extract(
   );
 
   const threads = workerTuning().WORKER_FFMPEG_THREADS;
+  let progressBuffer = "";
+  let lastReportedPercent = -1;
   await runProcess("ffmpeg", [
     "-nostdin", "-v", "error", "-threads", String(threads), ...inputOptions,
     "-i", path,
@@ -85,8 +118,29 @@ export async function extract(
     "-vf", `fps=${o.fps},scale=w='min(1920,iw)':h=-2`,
     "-c:v", "libwebp", "-threads", String(threads),
     "-frames:v", String(limits.maxFrames),
-    "-q:v", "80", "-n", join(directory, "%06d.webp"),
-  ], ffmpegTimeoutMs);
+    "-q:v", "80",
+    "-progress", "pipe:1", "-nostats",
+    "-n", join(directory, "%06d.webp"),
+  ], ffmpegTimeoutMs, async (chunk) => {
+    progressBuffer += chunk;
+    const lines = progressBuffer.split(/\r?\n/);
+    progressBuffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const separator = line.indexOf("=");
+      if (separator < 0) continue;
+      const key = line.slice(0, separator);
+      if (key !== "out_time_us") continue;
+      const microseconds = Number(line.slice(separator + 1));
+      if (!Number.isFinite(microseconds)) continue;
+      const processedSeconds = Math.max(0, microseconds / 1_000_000);
+      const percent = Math.min(100, Math.floor((processedSeconds / metadata.duration) * 100));
+      if (percent <= lastReportedPercent) continue;
+      lastReportedPercent = percent;
+      await onProgress?.({ percent, processedSeconds, durationSeconds: metadata.duration, expectedFrames });
+    }
+  });
+  if (lastReportedPercent < 100)
+    await onProgress?.({ percent: 100, processedSeconds: metadata.duration, durationSeconds: metadata.duration, expectedFrames });
 
   const names = (await readdir(directory)).filter((name) => /^[0-9]{6}\.webp$/.test(name)).sort();
   if (!names.length) throw new Error("No frames extracted");

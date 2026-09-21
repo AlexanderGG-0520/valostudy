@@ -17,7 +17,13 @@ it("probes and extracts the entire real video into timestamped WebP frames", asy
     );
 
     expect(await probe(source)).toEqual({ width: 320, height: 240, duration: 3 });
-    const result = await extract(source, output, { fps: 2 });
+    const progress: number[] = [];
+    const result = await extract(source, output, { fps: 2 }, undefined, ({ percent }) => {
+      progress.push(percent);
+    });
+    expect(progress.length).toBeGreaterThan(0);
+    expect(progress.at(-1)).toBe(100);
+    expect(progress).toEqual([...progress].sort((a, b) => a - b));
     expect(result.frames.map((frame) => frame.timestampMs)).toEqual([0, 500, 1000, 1500, 2000, 2500]);
     expect(result.frames[0].name).toBe("000001.webp");
     expect((await readFile(join(output, result.frames[0].name))).subarray(8, 12).toString()).toBe("WEBP");

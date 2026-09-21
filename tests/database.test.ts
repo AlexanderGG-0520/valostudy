@@ -362,7 +362,11 @@ it("completes multipart exactly once and persists a durable queue outbox", async
   await enqueueCompletedUpload(study.id, "owner");
   await enqueueCompletedUpload(study.id, "owner");
   expect(state.complete).toHaveBeenCalledTimes(1);
-  expect(await database.select().from(schema.jobs)).toMatchObject([{ studyId: study.id, status: "pending" }]);
+  expect(await database.select().from(schema.jobs)).toMatchObject([{
+    studyId: study.id,
+    status: "pending",
+    progress: { stage: "queued", percent: 0, processedFrames: null, totalFrames: null, startedAt: null },
+  }]);
   expect((await readableStudy(study.id))?.status).toBe("queued");
 });
 it("enforces the Free six-hour cooldown only after upload completion and allows released usage", async () => {
@@ -468,6 +472,12 @@ it("runs the worker on real video and commits frames, metadata and terminal stat
     expect(peakUploads).toBeLessThanOrEqual(16);
     const result = await buildManifest(study.id);
     expect(result.status).toBe("completed");
+    expect(result.processingProgress).toMatchObject({
+      stage: "completed",
+      percent: 100,
+      processedFrames: 3,
+      totalFrames: 3,
+    });
     expect(result.frames.map((f) => f.timestampMs)).toEqual([0, 1000, 2000]);
     expect(state.putFrame).toHaveBeenCalledTimes(3);
     expect((await database.select().from(schema.uploads))[0].metadata).toEqual({ width: 320, height: 240, duration: 3 });

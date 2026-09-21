@@ -3,7 +3,7 @@ import {
   check, foreignKey, index,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type { Plan, PlayerSettings, ProcessingOptions } from "@valostudy/schema";
+import type { Plan, PlayerSettings, ProcessingOptions, ProcessingProgress } from "@valostudy/schema";
 
 const time = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -88,6 +88,7 @@ export const jobs = pgTable("processing_jobs", {
   status: text("status", { enum: ["pending", "queued", "processing", "completed", "failed"] }).notNull().default("pending"),
   attempts: integer("attempts").notNull().default(0),
   error: text("error"),
+  progress: jsonb("progress").$type<ProcessingProgress>(),
   createdAt: time("created_at").notNull().defaultNow(),
   updatedAt: time("updated_at").notNull().defaultNow(),
 }, (t) => [
