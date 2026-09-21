@@ -24,6 +24,8 @@ vi.mock("@valostudy/storage", async (original) => ({
 }));
 vi.mock("../apps/web/lib/auth", () => ({ auth: () => ({ api: { getSession: state.getSession } }) }));
 import { createStudy, readableStudy, buildManifest, enqueueCompletedUpload, ownedUpload } from "../apps/web/lib/studies";
+import { buildComparisonManifest, createComparison } from "../apps/web/lib/comparisons";
+import { apiOwner, createApiKey, revokeApiKey } from "../apps/web/lib/api-auth";
 import { processVideo } from "../apps/worker/src/process";
 import { runProcess } from "../apps/worker/src/media";
 import { GET as frameGET } from "../apps/web/app/[id]/frames/[name]/route";
@@ -63,6 +65,56 @@ it("enforces Free media limits and snapshots an active Plus entitlement", async 
   const study = await createStudy("owner", { ...input, processing: { fps: 2 as const } });
   expect(study.plan).toBe("plus");
 });
+it("gates longitudinal comparisons to paid plans and emits a usable comparison manifest", async () => {
+  const first = await createStudy("owner", input);
+  const second = await createStudy("owner", input);
+  await database.update(schema.studies).set({ status: "completed" });
+
+  await expect(createComparison("owner", [first.id, second.id], "public"))
+    .rejects.toMatchObject({ status: 403 });
+
+  await database.insert(schema.billingSubscriptions).values({
+    userId: "owner",
+    plan: "plus",
+    status: "active",
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  });
+
+  const comparison = await createComparison("owner", [first.id, second.id], "public");
+  const manifest = await buildComparisonManifest(comparison.id);
+  expect(manifest.studies.map((study) => study.studyId)).toEqual([first.id, second.id]);
+  expect(manifest.studies[0].manifestUrl).toBe(`/${first.id}/manifest.json`);
+  expect(manifest.instruction).toContain("longitudinal");
+});
+
+it("issues Pro API keys once, stores only a hash, authenticates, and revokes them", async () => {
+  await expect(createApiKey("owner", "Coach workstation")).rejects.toMatchObject({ status: 403 });
+
+  await database.insert(schema.billingSubscriptions).values({
+    userId: "owner",
+    plan: "pro",
+    status: "active",
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  });
+
+  const created = await createApiKey("owner", "Coach workstation");
+  expect(created.secret).toMatch(/^vsk_/);
+
+  const [stored] = await database.select().from(schema.apiKeys);
+  expect(stored.prefix).toBe(created.secret.slice(0, 12));
+  expect(stored.keyHash).toMatch(/^[0-9a-f]{64}$/);
+  expect(JSON.stringify(stored)).not.toContain(created.secret);
+
+  const request = new Request("http://localhost/api/v1/studies", {
+    headers: { authorization: `Bearer ${created.secret}` },
+  });
+  await expect(apiOwner(request)).resolves.toBe("owner");
+  expect((await database.select().from(schema.apiKeys))[0].lastUsedAt).toBeInstanceOf(Date);
+
+  await revokeApiKey("owner", created.id);
+  await expect(apiOwner(request)).rejects.toMatchObject({ status: 401 });
+});
+
 it("migrates real SQL, creates Study + snapshot, and enforces private ownership", async () => {
   const study = await createStudy("owner", { ...input, visibility: "private" });
   expect(study.id).toMatch(/^[0-9a-f]{11}$/);
