@@ -12,6 +12,7 @@ vi.mock("@valostudy/config", () => ({ config: () => ({
 }) }));
 import { auth } from "../apps/web/lib/auth";
 import * as schema from "@valostudy/db/schema";
+import { eq } from "@valostudy/db";
 let pg: PGlite;
 beforeAll(async () => {
   pg = new PGlite();
@@ -24,18 +25,28 @@ afterAll(async () => { await pg.close(); });
 it("registers, authenticates a session, rejects bad credentials and signs out", async () => {
   const password = randomBytes(20).toString("hex");
   const request = (path: string, body: unknown, cookie = "") => new Request("http://localhost:3000/api/auth/" + path, {
-    method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3000", cookie },
+    method: "POST", headers: { "content-type": "application/json", origin: "http://localhost:3000", cookie, "x-valostudy-terms-accepted": "2026-09-22", "x-valostudy-privacy-accepted": "2026-09-22" },
     body: JSON.stringify(body),
   });
   const signup = await auth().handler(request("sign-up/email", { name: "Player", email: "player@example.test", password }));
   expect(signup.status).toBe(200);
   const cookie = signup.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
-  expect(cookie).toContain("session_token");
-  const session = await auth().api.getSession({ headers: new Headers({ cookie }) });
-  expect(session?.user.email).toBe("player@example.test");
+  expect(cookie).not.toContain("session_token");
+  expect(await auth().api.getSession({ headers: new Headers({ cookie }) })).toBeNull();
+
+  const unverified = await auth().handler(request("sign-in/email", { email: "player@example.test", password }));
+  expect(unverified.status).toBe(403);
+
+  await (state.database as ReturnType<typeof drizzle>).update(schema.user).set({ emailVerified: true }).where(eq(schema.user.email, "player@example.test"));
   const rejected = await auth().handler(request("sign-in/email", { email: "player@example.test", password: "incorrect-password" }));
   expect(rejected.status).toBe(401);
-  const signedOut = await auth().handler(request("sign-out", {}, cookie));
+  const signedIn = await auth().handler(request("sign-in/email", { email: "player@example.test", password }));
+  expect(signedIn.status).toBe(200);
+  const sessionCookie = signedIn.headers.getSetCookie().map((value) => value.split(";")[0]).join("; ");
+  expect(sessionCookie).toContain("session_token");
+  const session = await auth().api.getSession({ headers: new Headers({ cookie: sessionCookie }) });
+  expect(session?.user.email).toBe("player@example.test");
+  const signedOut = await auth().handler(request("sign-out", {}, sessionCookie));
   expect(signedOut.status).toBe(200);
-  expect(await auth().api.getSession({ headers: new Headers({ cookie }) })).toBeNull();
+  expect(await auth().api.getSession({ headers: new Headers({ cookie: sessionCookie }) })).toBeNull();
 });
