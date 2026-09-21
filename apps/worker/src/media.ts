@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { config } from "@valostudy/config";
+import { workerTuning } from "@valostudy/config";
 import {
   MAX_EXTRACTED_FRAMES,
   MAX_VIDEO_SECONDS,
@@ -77,7 +77,7 @@ export async function extract(
     Math.max(30 * 60 * 1000, Math.ceil(metadata.duration * 2 * 1000)),
   );
 
-  const threads = config().WORKER_FFMPEG_THREADS;
+  const threads = workerTuning().WORKER_FFMPEG_THREADS;
   await runProcess("ffmpeg", [
     "-nostdin", "-v", "error", "-threads", String(threads), ...inputOptions,
     "-i", path,
