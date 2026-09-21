@@ -69,6 +69,13 @@ export async function extract(
   if (expectedFrames > limits.maxFrames)
     throw new Error(`Full-match extraction would exceed plan limit of ${limits.maxFrames} frames; choose a lower sampling rate`);
 
+  // Long VODs can legitimately take longer than 30 minutes on the bounded 2-thread worker.
+  // Allow up to 2x realtime, with a 30-minute floor and 6-hour hard ceiling.
+  const ffmpegTimeoutMs = Math.min(
+    6 * 60 * 60 * 1000,
+    Math.max(30 * 60 * 1000, Math.ceil(metadata.duration * 2 * 1000)),
+  );
+
   await runProcess("ffmpeg", [
     "-nostdin", "-v", "error", "-threads", "2", ...inputOptions,
     "-i", path,
@@ -77,7 +84,7 @@ export async function extract(
     "-c:v", "libwebp", "-threads", "2",
     "-frames:v", String(limits.maxFrames),
     "-q:v", "80", "-n", join(directory, "%06d.webp"),
-  ], 30 * 60 * 1000);
+  ], ffmpegTimeoutMs);
 
   const names = (await readdir(directory)).filter((name) => /^[0-9]{6}\.webp$/.test(name)).sort();
   if (!names.length) throw new Error("No frames extracted");
