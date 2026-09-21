@@ -69,7 +69,7 @@ async function submit(page: Page, visibility: "public" | "private", invalid = fa
 }
 
 for (const visibility of ["public", "private"] as const) {
-  test(`browser direct multipart → real Worker → ${visibility} manifest and WebP`, async ({ page, browser }) => {
+  test(`browser direct multipart → real Worker → ${visibility} manifest and JPEG`, async ({ page, browser }) => {
     const putOrigins: string[] = [];
     const webBodies: number[] = [];
     page.on("request", (request) => {
@@ -105,11 +105,11 @@ for (const visibility of ["public", "private"] as const) {
     const job = await queue.getJob(id);
     expect(job?.data).toMatchObject({ studyId: id, sourceObjectKey: `studies/${id}/source`, options: { fps: 1 } });
     for (const frame of manifest.frames) {
-      expect(frame.url).toMatch(new RegExp(`^/${id}/frames/[0-9]{6}\\.webp$`));
+      expect(frame.url).toMatch(new RegExp(`^/${id}/frames/[0-9]{6}\\.jpg$`));
       const response = await page.request.get(frame.url);
       expect(response.status()).toBe(200);
-      expect(response.headers()["content-type"]).toBe("image/webp");
-      expect((await response.body()).subarray(8, 12).toString()).toBe("WEBP");
+      expect(response.headers()["content-type"]).toBe("image/jpeg");
+      expect(Array.from((await response.body()).subarray(0, 3))).toEqual([0xff, 0xd8, 0xff]);
     }
     await page.goto("/" + id);
     await expect(page.getByRole("heading", { name: "Study " + id })).toBeVisible();
@@ -135,7 +135,7 @@ test("invalid media reaches failed in PostgreSQL and BullMQ after bounded retrie
   const manifest = await terminal(page.request, id, "failed");
   expect(manifest.frames).toEqual([]);
   expect((await persisted(id, "failed")).attempts).toBe(3);
-  expect((await page.request.get(`/${id}/frames/000001.webp`)).status()).toBe(404);
+  expect((await page.request.get(`/${id}/frames/000001.jpg`)).status()).toBe(404);
 });
 
 test("real multipart validation and concurrent completion produce exactly one job", async ({ page }) => {
