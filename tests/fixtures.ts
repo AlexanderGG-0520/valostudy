@@ -26,7 +26,7 @@ export const manifest = manifestSchema.parse({
   studyId: id,
   player: input.player,
   status: "completed",
-  frames: [{ timestampMs: 500, url: `/${id}/frames/000001.webp` }],
+  frames: [{ timestampMs: 500, url: `/${id}/frames/000001.jpg` }],
   timestampNote: "Sampling timeline; timestamps are approximate, not original frame PTS.",
   coachingProtocol: { redditResearchRequired: true, promptTemplateVersion: "v1" },
   prompt: "Read Reddit and inspect frames",
