@@ -29,6 +29,7 @@ import { apiOwner, createApiKey, revokeApiKey } from "../apps/web/lib/api-auth";
 import { assignStudy, buildClientManifest, createClient, deleteClient, listClients } from "../apps/web/lib/workspace";
 import { processVideo } from "../apps/worker/src/process";
 import { billingStatus, currentPlan } from "../apps/web/lib/billing";
+import { createPaymentLinkCheckout, processStripeEvent } from "../apps/web/lib/stripe";
 import { runProcess } from "../apps/worker/src/media";
 import { GET as frameGET } from "../apps/web/app/[id]/frames/[name]/route";
 import * as schema from "@valostudy/db/schema";
@@ -67,6 +68,141 @@ it("grants the designated developer account Pro without a Stripe subscription", 
 
   const study = await createStudy("owner", { ...input, processing: { fps: 5 as const } });
   expect(study.plan).toBe("pro");
+});
+
+it("binds Payment Link checkout to the authenticated user and activates the matching plan", async () => {
+  const env = {
+    DATABASE_URL: "postgresql://unused:unused@localhost:5432/unused",
+    REDIS_URL: "redis://localhost:6379",
+    BETTER_AUTH_URL: "http://localhost:3000",
+    BETTER_AUTH_SECRET: "x".repeat(32),
+    S3_ENDPOINT: "http://localhost:9000",
+    S3_REGION: "us-east-1",
+    S3_BUCKET: "valostudy",
+    S3_ACCESS_KEY: "minio",
+    S3_SECRET_KEY: "miniosecret",
+    STRIPE_SECRET_KEY: "sk_test_placeholder",
+    STRIPE_WEBHOOK_SECRET: "whsec_test",
+    STRIPE_PLUS_PAYMENT_LINK_URL: "https://buy.stripe.com/plus_test",
+    STRIPE_PRO_PAYMENT_LINK_URL: "https://buy.stripe.com/pro_test",
+  };
+  for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+
+  try {
+    const checkoutUrl = new URL(await createPaymentLinkCheckout({
+      userId: "owner",
+      email: "player@example.test",
+      plan: "plus",
+    }));
+    const intentId = checkoutUrl.searchParams.get("client_reference_id");
+    expect(intentId).toBeTruthy();
+
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/payment_links/plink_plus")) {
+        return new Response(JSON.stringify({
+          id: "plink_plus",
+          url: "https://buy.stripe.com/plus_test",
+          active: true,
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (url.endsWith("/subscriptions/sub_plus")) {
+        return new Response(JSON.stringify({
+          id: "sub_plus",
+          customer: "cus_plus",
+          status: "active",
+          current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+          cancel_at_period_end: false,
+          metadata: {},
+          items: { data: [] },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      throw new Error(`Unexpected Stripe URL: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await processStripeEvent({
+      id: "evt_payment_link_plus",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_plus",
+          customer: "cus_plus",
+          subscription: "sub_plus",
+          payment_link: "plink_plus",
+          client_reference_id: intentId,
+          metadata: {},
+        },
+      },
+    });
+
+    expect(await database.select().from(schema.billingSubscriptions)).toMatchObject([{
+      userId: "owner",
+      stripeCustomerId: "cus_plus",
+      stripeSubscriptionId: "sub_plus",
+      plan: "plus",
+      status: "active",
+    }]);
+    expect((await database.select().from(schema.billingCheckoutIntents))[0].consumedAt).toBeInstanceOf(Date);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});
+
+it("does not grant Pro when a Pro checkout intent is paid through the Plus Payment Link", async () => {
+  const env = {
+    DATABASE_URL: "postgresql://unused:unused@localhost:5432/unused",
+    REDIS_URL: "redis://localhost:6379",
+    BETTER_AUTH_URL: "http://localhost:3000",
+    BETTER_AUTH_SECRET: "x".repeat(32),
+    S3_ENDPOINT: "http://localhost:9000",
+    S3_REGION: "us-east-1",
+    S3_BUCKET: "valostudy",
+    S3_ACCESS_KEY: "minio",
+    S3_SECRET_KEY: "miniosecret",
+    STRIPE_SECRET_KEY: "sk_test_placeholder",
+    STRIPE_WEBHOOK_SECRET: "whsec_test",
+    STRIPE_PLUS_PAYMENT_LINK_URL: "https://buy.stripe.com/plus_test",
+    STRIPE_PRO_PAYMENT_LINK_URL: "https://buy.stripe.com/pro_test",
+  };
+  for (const [key, value] of Object.entries(env)) vi.stubEnv(key, value);
+
+  try {
+    const checkoutUrl = new URL(await createPaymentLinkCheckout({
+      userId: "owner",
+      email: "player@example.test",
+      plan: "pro",
+    }));
+    const intentId = checkoutUrl.searchParams.get("client_reference_id");
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      id: "plink_plus",
+      url: "https://buy.stripe.com/plus_test",
+      active: true,
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+
+    await expect(processStripeEvent({
+      id: "evt_swapped_link",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_swapped",
+          customer: "cus_swapped",
+          subscription: "sub_swapped",
+          payment_link: "plink_plus",
+          client_reference_id: intentId,
+          metadata: {},
+        },
+      },
+    })).resolves.toMatchObject({ ignored: true });
+
+    expect(await database.select().from(schema.billingSubscriptions)).toHaveLength(0);
+    expect((await database.select().from(schema.billingCheckoutIntents))[0].consumedAt).toBeNull();
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
 });
 
 it("enforces Free media limits and snapshots an active Plus entitlement", async () => {
