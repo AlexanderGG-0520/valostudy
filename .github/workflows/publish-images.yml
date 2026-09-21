@@ -1,0 +1,117 @@
+name: Publish container images
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: valostudy-production-images
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: valostudy-web
+            dockerfile: infra/docker/web.Dockerfile
+          - image: valostudy-worker
+            dockerfile: infra/docker/worker.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.image }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/alexandergg-0520/${{ matrix.image }}:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/alexandergg-0520/${{ matrix.image }}:main
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  update-gitops:
+    needs: publish
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Update immutable image tags
+        env:
+          IMAGE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current="$(git rev-parse HEAD)"
+          if [[ "$current" != "$IMAGE_SHA" ]]; then
+            echo "main advanced to $current; skipping stale deployment update for $IMAGE_SHA"
+            exit 0
+          fi
+
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          sha = os.environ["IMAGE_SHA"]
+          path = Path("infra/kubernetes/apps.yaml")
+          text = path.read_text()
+
+          for component in ("web", "worker"):
+              pattern = rf"(image:\s+ghcr\.io/alexandergg-0520/valostudy-{component}:)[^\s]+"
+              text, count = re.subn(pattern, rf"\g<1>{sha}", text)
+              if count != 1:
+                  raise SystemExit(f"expected exactly one image reference for {component}, found {count}")
+
+          path.write_text(text)
+          PY
+
+      - name: Commit deployment revision
+        env:
+          IMAGE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- infra/kubernetes/apps.yaml; then
+            echo "Deployment manifest already references $IMAGE_SHA"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add infra/kubernetes/apps.yaml
+          git commit -m "chore(deploy): valostudy ${IMAGE_SHA:0:12} [skip ci]"
+          git push origin HEAD:main
