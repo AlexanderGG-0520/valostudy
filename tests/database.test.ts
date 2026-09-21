@@ -26,6 +26,7 @@ vi.mock("../apps/web/lib/auth", () => ({ auth: () => ({ api: { getSession: state
 import { createStudy, readableStudy, buildManifest, enqueueCompletedUpload, ownedUpload } from "../apps/web/lib/studies";
 import { buildComparisonManifest, createComparison } from "../apps/web/lib/comparisons";
 import { apiOwner, createApiKey, revokeApiKey } from "../apps/web/lib/api-auth";
+import { assignStudy, buildClientManifest, createClient, deleteClient, listClients } from "../apps/web/lib/workspace";
 import { processVideo } from "../apps/worker/src/process";
 import { runProcess } from "../apps/worker/src/media";
 import { GET as frameGET } from "../apps/web/app/[id]/frames/[name]/route";
@@ -113,6 +114,41 @@ it("issues Pro API keys once, stores only a hash, authenticates, and revokes the
 
   await revokeApiKey("owner", created.id);
   await expect(apiOwner(request)).rejects.toMatchObject({ status: 401 });
+});
+
+it("gates Pro Coach Workspace, assigns completed Studies, and preserves longitudinal history", async () => {
+  const study = await createStudy("owner", input);
+  await database.update(schema.studies).set({
+    status: "completed",
+    completedAt: new Date(),
+  }).where(eq(schema.studies.id, study.id));
+
+  await expect(createClient("owner", { displayName: "Player A" }))
+    .rejects.toMatchObject({ status: 403 });
+
+  await database.insert(schema.billingSubscriptions).values({
+    userId: "owner",
+    plan: "pro",
+    status: "active",
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  });
+
+  const client = await createClient("owner", {
+    displayName: "Player A",
+    riotId: "PlayerA#JP1",
+    notes: "Track first deaths and retakes",
+  });
+  await assignStudy("owner", client.id, study.id);
+
+  const manifest = await buildClientManifest(client.id, "owner");
+  expect(manifest.client.riotId).toBe("PlayerA#JP1");
+  expect(manifest.studies.map((entry) => entry.studyId)).toEqual([study.id]);
+  expect(manifest.instruction).toContain("longitudinal");
+
+  expect(await listClients("owner")).toMatchObject([{ id: client.id, studyCount: 1 }]);
+  await deleteClient("owner", client.id);
+  expect(await listClients("owner")).toEqual([]);
+  expect(await database.select().from(schema.studies)).toHaveLength(1);
 });
 
 it("migrates real SQL, creates Study + snapshot, and enforces private ownership", async () => {
