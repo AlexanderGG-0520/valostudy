@@ -24,7 +24,7 @@ it("returns 404 for an unauthorized manifest", async () => {
 it("renders /{id} on the server with escaped user data and correct URLs", async () => {
   const html = renderToStaticMarkup(await StudyPage({ params: Promise.resolve({ id }) }));
   expect(html).toContain(`/${id}/manifest.json`);
-  expect(html).toContain(`/${id}/frames/000001.webp`);
+  expect(html).toContain(`/${id}/frames/000001.jpg`);
   expect(html).not.toContain("<script>alert(1)</script>");
   expect(html).toContain("&lt;script&gt;");
 });
