@@ -81,10 +81,11 @@ export function UploadForm() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const sessionUserId = session?.user.id;
   const limits = PLAN_LIMITS[billing?.plan ?? "free"];
 
   async function refreshBilling() {
-    if (!session) {
+    if (!sessionUserId) {
       setBilling(null);
       return;
     }
@@ -93,8 +94,16 @@ export function UploadForm() {
   }
 
   useEffect(() => {
-    void refreshBilling();
-  }, [session?.user.id]);
+    let active = true;
+    if (!sessionUserId) {
+      setBilling(null);
+      return;
+    }
+    void fetch("/api/billing/status", { cache: "no-store" }).then(async (response) => {
+      if (active && response.ok) setBilling(await response.json() as BillingStatus);
+    });
+    return () => { active = false; };
+  }, [sessionUserId]);
 
   async function authenticate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
