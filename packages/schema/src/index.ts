@@ -111,14 +111,16 @@ export const playerSettingsSchema = z.object({
   context: z.string().max(6000).default(""),
 });
 
+export const samplingFpsSchema = z.union([
+  z.literal(0.25),
+  z.literal(0.5),
+  z.literal(1),
+  z.literal(2),
+  z.literal(5),
+]);
+
 export const processingOptionsSchema = z.object({
-  fps: z.union([
-    z.literal(0.25),
-    z.literal(0.5),
-    z.literal(1),
-    z.literal(2),
-    z.literal(5),
-  ]).default(0.5),
+  fps: samplingFpsSchema.default(0.5),
 });
 
 export const VCMR_SCHEMA = "valostudy.vcmr" as const;
@@ -145,7 +147,7 @@ export const vcmrMediaSchema = z.object({
   height: z.number().int().positive().nullable(),
   durationMs: z.number().int().positive().nullable(),
   sampling: z.object({
-    fps: processingOptionsSchema.shape.fps,
+    fps: samplingFpsSchema,
     strategy: z.literal("fixed_rate"),
     timestampSemantics: z.literal(VCMR_TIMESTAMP_SEMANTICS),
   }),
@@ -178,7 +180,9 @@ export const vcmrAnnotationSchema = z.object({
 
 function validateFrameIdentity(
   frames: Array<{ id: string; name: string }>,
-  ctx: z.RefinementCtx,
+  ctx: {
+    addIssue(issue: { code: "custom"; message: string; path: Array<string | number> }): void;
+  },
 ) {
   const ids = new Set<string>();
   for (let index = 0; index < frames.length; index += 1) {
