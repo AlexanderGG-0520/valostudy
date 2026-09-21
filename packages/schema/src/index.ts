@@ -22,6 +22,8 @@ export const PLAN_LIMITS = {
     rollingWindowDays: null,
     rollingStudyLimit: null,
     publicStudyLimitLabel: "1 Study / 6h cooldown",
+    compareLimit: 0,
+    apiAccess: false,
   },
   plus: {
     label: "Plus",
@@ -36,6 +38,8 @@ export const PLAN_LIMITS = {
     rollingWindowDays: 7,
     rollingStudyLimit: 30,
     publicStudyLimitLabel: "30 Studies / rolling 7 days",
+    compareLimit: 20,
+    apiAccess: false,
   },
   pro: {
     label: "Pro",
@@ -51,6 +55,8 @@ export const PLAN_LIMITS = {
     // Internal abuse ceiling. The product UI presents Pro as Unlimited.
     rollingStudyLimit: 500,
     publicStudyLimitLabel: "Unlimited Studies (fair use)",
+    compareLimit: 100,
+    apiAccess: true,
   },
 } as const satisfies Record<Plan, {
   label: string;
@@ -65,6 +71,8 @@ export const PLAN_LIMITS = {
   rollingWindowDays: number | null;
   rollingStudyLimit: number | null;
   publicStudyLimitLabel: string;
+  compareLimit: number;
+  apiAccess: boolean;
 }>;
 
 export function planLimits(plan: Plan) {
