@@ -132,6 +132,18 @@ export const stripeEvents = pgTable("stripe_events", {
   processedAt: time("processed_at").notNull().defaultNow(),
 });
 
+export const billingCheckoutIntents = pgTable("billing_checkout_intents", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  plan: text("plan", { enum: ["plus", "pro"] }).$type<Exclude<Plan, "free">>().notNull(),
+  createdAt: time("created_at").notNull().defaultNow(),
+  expiresAt: time("expires_at").notNull(),
+  consumedAt: time("consumed_at"),
+}, (t) => [
+  check("billing_checkout_intent_plan", sql`${t.plan} in ('plus','pro')`),
+  index("billing_checkout_intents_user_idx").on(t.userId, t.createdAt),
+]);
+
 export const coachClients = pgTable("coach_clients", {
   id: text("id").primaryKey(),
   ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
