@@ -9,6 +9,8 @@ data:
   S3_BUCKET: valostudy
   STRIPE_PLUS_PAYMENT_LINK_URL: https://buy.stripe.com/5kQbJ0gR2fp9alR1ow9IQ04
   STRIPE_PRO_PAYMENT_LINK_URL: https://buy.stripe.com/cNi6oG58k1yj3Xtd7e9IQ05
+  WORKER_FFMPEG_THREADS: "8"
+  WORKER_FRAME_UPLOAD_CONCURRENCY: "32"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -69,10 +71,10 @@ spec:
             - configMapRef: { name: valostudy-config }
             - secretRef: { name: valostudy-secrets }
           resources:
-            requests: { cpu: "1", memory: 512Mi, ephemeral-storage: 5Gi }
-            limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 8Gi }
+            requests: { cpu: "4", memory: 2Gi, ephemeral-storage: 16Gi }
+            limits: { cpu: "8", memory: 8Gi, ephemeral-storage: 140Gi }
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
           volumeMounts: [{ name: scratch, mountPath: /tmp }]
       volumes:
         - name: scratch
-          emptyDir: { sizeLimit: 6Gi }
+          emptyDir: { sizeLimit: 128Gi }

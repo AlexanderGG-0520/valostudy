@@ -455,7 +455,17 @@ it("runs the worker on real video and commits frames, metadata and terminal stat
     }));
     const job = { id: study.id, attemptsMade: 0, opts: { attempts: 3 },
       data: { studyId: study.id, sourceObjectKey: `studies/${study.id}/source`, options: input.processing } };
+    let activeUploads = 0;
+    let peakUploads = 0;
+    state.putFrame.mockImplementation(async () => {
+      activeUploads += 1;
+      peakUploads = Math.max(peakUploads, activeUploads);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      activeUploads -= 1;
+    });
     await processVideo(job);
+    expect(peakUploads).toBeGreaterThan(1);
+    expect(peakUploads).toBeLessThanOrEqual(16);
     const result = await buildManifest(study.id);
     expect(result.status).toBe("completed");
     expect(result.frames.map((f) => f.timestampMs)).toEqual([0, 1000, 2000]);

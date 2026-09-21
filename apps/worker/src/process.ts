@@ -8,10 +8,39 @@ import type { Job } from "bullmq";
 import { db, studies, jobs, uploads, frames, usageEvents, eq, and, inArray, isNull } from "@valostudy/db";
 import { PLAN_LIMITS, processingJobSchema } from "@valostudy/schema";
 import { Storage, frameKey, sourceKey } from "@valostudy/storage";
-import { log } from "@valostudy/config";
+import { log, workerTuning } from "@valostudy/config";
 import { extract } from "./media";
 
 const DAY = 24 * 60 * 60 * 1000;
+const FRAME_DB_BATCH_SIZE = 1000;
+
+async function forEachConcurrent<T>(
+  items: readonly T[],
+  concurrency: number,
+  task: (item: T) => Promise<void>,
+) {
+  let nextIndex = 0;
+  let firstError: unknown;
+
+  await Promise.all(Array.from(
+    { length: Math.min(Math.max(1, concurrency), items.length) },
+    async () => {
+      for (;;) {
+        if (firstError) return;
+        const index = nextIndex++;
+        if (index >= items.length) return;
+        try {
+          await task(items[index]);
+        } catch (error) {
+          firstError ??= error;
+          return;
+        }
+      }
+    },
+  ));
+
+  if (firstError) throw firstError;
+}
 
 export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade" | "opts">) {
   const payload = processingJobSchema.parse(job.data);
@@ -99,12 +128,26 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
     });
 
     stage = "persist";
-    const rows: (typeof frames.$inferInsert)[] = [];
-    for (const frame of result.frames) {
-      const key = frameKey(id, frame.name);
-      await storage.putFrame(key, await readFile(join(output, frame.name)));
-      rows.push({ ...frame, studyId: id, objectKey: key });
-    }
+    const persistStarted = Date.now();
+    const frameUploadConcurrency = workerTuning().WORKER_FRAME_UPLOAD_CONCURRENCY;
+    const rows: (typeof frames.$inferInsert)[] = result.frames.map((frame) => ({
+      ...frame,
+      studyId: id,
+      objectKey: frameKey(id, frame.name),
+    }));
+
+    await forEachConcurrent(rows, frameUploadConcurrency, async (frame) => {
+      await storage.putFrame(frame.objectKey, await readFile(join(output, frame.name)));
+    });
+
+    log("frames_persisted", {
+      studyId: id,
+      jobId: job.id,
+      stage,
+      duration: Date.now() - persistStarted,
+      frameCount: rows.length,
+      concurrency: frameUploadConcurrency,
+    });
 
     const completedAt = new Date();
     const retentionUntil = limits.retentionDays === null
@@ -113,7 +156,9 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
 
     await db().transaction(async (tx) => {
       await tx.delete(frames).where(eq(frames.studyId, id));
-      await tx.insert(frames).values(rows);
+      for (let offset = 0; offset < rows.length; offset += FRAME_DB_BATCH_SIZE) {
+        await tx.insert(frames).values(rows.slice(offset, offset + FRAME_DB_BATCH_SIZE));
+      }
       await tx.update(uploads).set({ metadata: result.metadata }).where(eq(uploads.studyId, id));
       await tx.update(studies).set({
         status: "completed",
