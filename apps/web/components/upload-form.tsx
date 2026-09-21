@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { createAuthClient } from "better-auth/react";
 import { PLAN_LIMITS, studyCreationSchema, type Plan } from "@valostudy/schema";
 import { Button } from "./ui/button";
+import { authClient } from "../lib/auth-client";
 
-const authClient = createAuthClient();
 
 type BillingStatus = {
   plan: Plan;
@@ -81,6 +80,7 @@ export function UploadForm() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const sessionUserId = session?.user.id;
   const limits = PLAN_LIMITS[billing?.plan ?? "free"];
 
@@ -113,12 +113,39 @@ export function UploadForm() {
         password: String(data.get("password")),
         name: String(data.get("name")),
       };
-      const result = data.get("mode") === "signup"
-        ? await authClient.signUp.email(input)
+      const signingUp = data.get("mode") === "signup";
+      const result = signingUp
+        ? await authClient.signUp.email({
+            ...input,
+            termsAccepted: data.get("termsAccepted") === "on",
+            privacyAccepted: data.get("privacyAccepted") === "on",
+            callbackURL: "/account",
+          })
         : await authClient.signIn.email(input);
-      if (result.error) throw new Error(result.error.message);
+      if (result.error) {
+        if (!signingUp && result.error.status === 403) {
+          throw new Error("メール認証が必要です。確認メールを再送しました。");
+        }
+        throw new Error(result.error.message);
+      }
+      if (signingUp) {
+        setMessage("確認メールを送信しました。メール内のリンクを開いて登録を完了してください。");
+      }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "ログイン失敗");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signInWithPasskey() {
+    setBusy(true);
+    setMessage("");
+    try {
+      const result = await authClient.signIn.passkey({});
+      if (result.error) throw new Error(result.error.message);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "パスキーログインに失敗しました");
     } finally {
       setBusy(false);
     }
@@ -240,7 +267,12 @@ export function UploadForm() {
       <form className="auth-grid" onSubmit={authenticate}>
         <label>
           <span className="field-label">操作</span>
-          <select name="mode" aria-label="操作">
+          <select
+            name="mode"
+            aria-label="操作"
+            value={authMode}
+            onChange={(event) => setAuthMode(event.currentTarget.value as "signin" | "signup")}
+          >
             <option value="signin">ログイン</option>
             <option value="signup">新規登録</option>
           </select>
@@ -257,10 +289,35 @@ export function UploadForm() {
           <span className="field-label">パスワード（12文字以上）</span>
           <input name="password" aria-label="パスワード（12文字以上）" type="password" required minLength={12} autoComplete="current-password" />
         </label>
+        {authMode === "signup" && <div className="consent-box">
+          <label className="consent-row">
+            <input name="termsAccepted" type="checkbox" required />
+            <span>
+              <a href="/terms" target="_blank" rel="noreferrer">利用規約</a>に同意します
+            </span>
+          </label>
+          <label className="consent-row">
+            <input name="privacyAccepted" type="checkbox" required />
+            <span>
+              <a href="/privacy" target="_blank" rel="noreferrer">プライバシーポリシー</a>に同意します
+            </span>
+          </label>
+          <p className="field-hint">アカウント作成には両方への同意が必要です。サブアカウントの作成は禁止されています。</p>
+        </div>}
         <div className="form-actions">
           <Button className="primary-button" disabled={busy || isPending}>続ける</Button>
         </div>
       </form>
+      <div className="auth-divider"><span>または</span></div>
+      <Button
+        className="secondary-button passkey-login-button"
+        variant="outline"
+        disabled={busy || isPending}
+        onClick={() => void signInWithPasskey()}
+      >
+        パスキーでログイン
+      </Button>
+      <p className="field-hint">新規登録ではメールアドレス確認後にログインできます。</p>
       <p className="status-line" role="status">{message}</p>
     </section>;
   }
@@ -271,14 +328,17 @@ export function UploadForm() {
         <span className="session-label">SIGNED IN</span>
         <strong>{session.user.email}</strong>
       </div>
-      <Button
-        className="secondary-button"
-        variant="outline"
-        disabled={busy}
-        onClick={() => void authClient.signOut()}
-      >
-        ログアウト
-      </Button>
+      <div className="session-actions">
+        <a className="account-link" href="/account">マイページ</a>
+        <Button
+          className="secondary-button"
+          variant="outline"
+          disabled={busy}
+          onClick={() => void authClient.signOut()}
+        >
+          ログアウト
+        </Button>
+      </div>
     </div>
 
     <form className="study-form" onSubmit={upload}>

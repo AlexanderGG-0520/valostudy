@@ -21,6 +21,8 @@ async function signup(page: Page) {
   await page.getByLabel("操作", { exact: true }).selectOption("signup");
   await page.getByLabel("メール", { exact: true }).fill(randomBytes(8).toString("hex") + "@example.test");
   await page.getByLabel("パスワード", { exact: false }).fill(randomBytes(20).toString("hex"));
+  await page.getByLabel("利用規約", { exact: false }).check();
+  await page.getByLabel("プライバシーポリシー", { exact: false }).check();
   await page.getByRole("button", { name: "続ける", exact: true }).click();
   await expect(page.getByRole("button", { name: "ログアウト" })).toBeVisible();
 }

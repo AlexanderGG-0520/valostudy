@@ -53,7 +53,7 @@ pnpm dev
 pnpm dev:worker
 ```
 
-http://localhost:3000 で登録・ログインし、アップロード前にプレイヤー設定・試合全体の録画・フレーム抽出間隔・公開範囲を入力します。開始秒や終了秒の指定はなく、録画全体を処理します。デフォルトはprivate（ownerのみ）。publicを選ぶとAIがログインなしで取得できます。公開Studyのframe・設定・状況メモは誰でも閲覧できます。
+http://localhost:3000 で登録・ログインし、アップロード前にプレイヤー設定・試合全体の録画・フレーム抽出間隔・公開範囲を入力します。 新規登録ではResendから確認メールを送り、リンクを開くまでメール/パスワードログインは完了しません。登録後はマイページからWebAuthnパスキーを追加でき、以後はパスキーでもログインできます。開始秒や終了秒の指定はなく、録画全体を処理します。デフォルトはprivate（ownerのみ）。publicを選ぶとAIがログインなしで取得できます。公開Studyのframe・設定・状況メモは誰でも閲覧できます。
 
 MinIO consoleは http://localhost:9001 。privateの `valostudy` bucketを作成し、ブラウザのPUTを許可するCORSを設定します。AWS CLIを使う例（初回のみcreate-bucket）:
 
@@ -95,6 +95,8 @@ aws --endpoint-url "$S3_ENDPOINT" s3api get-bucket-cors \
 | REDIS_URL | Valkey / Redis接続、rediss://でTLS |
 | BETTER_AUTH_URL | Webの正規origin、認証・CSRF検証に使用 |
 | BETTER_AUTH_SECRET | 32文字以上、全Web replicaで同じ秘密 |
+| RESEND_API_KEY | Resend server API key。確認メール送信に使用 |
+| RESEND_FROM_EMAIL | Resendで検証済みdomainの送信元。例: `VALOSTUDY <auth@example.com>` |
 | S3_ENDPOINT | browserとWeb/Workerの双方から到達可能なendpoint |
 | S3_REGION | MinIO: us-east-1 / R2: auto |
 | S3_BUCKET | private bucket名 |
@@ -223,7 +225,7 @@ docker build -f infra/docker/worker.Dockerfile -t valostudy-worker .
 
 WebはNext standalone、WorkerはFFmpeg入りNode image。Workerはworkspace TypeScript exportsをtsxで解決します。migrationを1回実行してからそれぞれ起動します。
 
-`infra/kubernetes/apps.yaml` のimage、origin、storageを置換し、別途Secret `valostudy-secrets` にDATABASE_URL、REDIS_URL、BETTER_AUTH_SECRET、S3_ACCESS_KEY、S3_SECRET_KEYを設定します。秘密の実値はmanifestにありません。TLS Ingress・PostgreSQL・Valkey・storageは別途用意してください。Web/Workerは独立scale可能、Workerは1podあたりconcurrency=1で一時storageが必要です。
+`infra/kubernetes/apps.yaml` のimage、origin、storageを置換し、別途Secret `valostudy-secrets` にDATABASE_URL、REDIS_URL、BETTER_AUTH_SECRET、RESEND_API_KEY、RESEND_FROM_EMAIL、S3_ACCESS_KEY、S3_SECRET_KEYを設定します。秘密の実値はmanifestにありません。TLS Ingress・PostgreSQL・Valkey・storageは別途用意してください。Web/Workerは独立scale可能、Workerは1podあたりconcurrency=1で一時storageが必要です。
 
 ## Observability / current limitations
 

@@ -1520,3 +1520,243 @@ input[type="file"]::file-selector-button {
     width: 100%;
   }
 }
+.brand-actions,
+.session-actions,
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-link {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: rgba(255, 252, 246, 0.56);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 760;
+  text-decoration: none;
+}
+
+.account-link:hover {
+  background: var(--paper-strong);
+  border-color: #9f927e;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: var(--muted-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  height: 1px;
+  flex: 1;
+  background: rgba(112, 99, 79, 0.2);
+  content: "";
+}
+
+.passkey-login-button,
+.passkey-action {
+  min-height: 48px;
+}
+
+.passkey-login-button {
+  width: 100%;
+}
+
+.account-page {
+  max-width: 900px;
+}
+
+.account-header {
+  margin-bottom: 30px;
+}
+
+.account-stack {
+  display: grid;
+  gap: 20px;
+}
+
+.account-card {
+  padding: 30px;
+  border: 1px solid rgba(112, 99, 79, 0.22);
+  border-radius: 24px;
+  background:
+    linear-gradient(145deg, rgba(255, 252, 246, 0.94), rgba(246, 240, 230, 0.86));
+  box-shadow: var(--shadow-soft);
+}
+
+.account-actions {
+  justify-content: space-between;
+}
+
+.passkey-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  margin-bottom: 24px;
+}
+
+.passkey-create label {
+  margin: 0;
+}
+
+.passkey-list {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid rgba(112, 99, 79, 0.18);
+  padding-top: 18px;
+}
+
+.passkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 17px 18px;
+  border: 1px solid rgba(112, 99, 79, 0.18);
+  border-radius: 15px;
+  background: rgba(255, 252, 246, 0.56);
+}
+
+.passkey-row strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+.passkey-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--muted-ink);
+  font-size: 0.74rem;
+}
+
+.passkey-empty {
+  display: grid;
+  gap: 5px;
+  padding: 20px 2px 8px;
+  color: var(--muted-ink);
+  font-size: 0.82rem;
+}
+
+.passkey-empty strong {
+  color: var(--ink);
+}
+
+.danger-button {
+  color: #7e3d32 !important;
+}
+
+@media (max-width: 700px) {
+  .brand-actions {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .session-bar,
+  .account-actions,
+  .passkey-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .session-actions {
+    flex-wrap: wrap;
+  }
+
+  .passkey-create {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .passkey-action {
+    width: 100%;
+  }
+}
+
+
+.consent-box {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 16px 18px;
+  border: 1px solid rgba(112, 99, 79, 0.18);
+  border-radius: 14px;
+  background: rgba(233, 225, 212, 0.38);
+}
+
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.consent-row input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--olive-dark);
+}
+
+.consent-row a {
+  color: var(--olive-dark);
+  font-weight: 760;
+  text-underline-offset: 3px;
+}
+
+.legal-page {
+  max-width: 900px;
+}
+
+.legal-card {
+  display: grid;
+  gap: 28px;
+  padding: 34px;
+  border: 1px solid rgba(112, 99, 79, 0.22);
+  border-radius: 24px;
+  background: rgba(255, 250, 241, 0.72);
+  box-shadow: var(--shadow-soft);
+}
+
+.legal-card section {
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(112, 99, 79, 0.15);
+}
+
+.legal-card section:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.legal-card h2 {
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.legal-card p {
+  margin: 8px 0 0;
+  color: #5e5a52;
+  font-size: 0.88rem;
+  line-height: 1.85;
+}

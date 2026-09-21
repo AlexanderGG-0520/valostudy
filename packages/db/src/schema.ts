@@ -15,6 +15,10 @@ export const user = pgTable("users", {
   image: text("image"),
   createdAt: time("created_at").notNull().defaultNow(),
   updatedAt: time("updated_at").notNull().defaultNow(),
+  termsAccepted: boolean("terms_accepted").notNull().default(false),
+  privacyAccepted: boolean("privacy_accepted").notNull().default(false),
+  legalAcceptedAt: time("legal_accepted_at"),
+  legalVersion: text("legal_version"),
 });
 
 export const session = pgTable("sessions", {
@@ -52,6 +56,24 @@ export const verification = pgTable("verifications", {
   createdAt: time("created_at").notNull().defaultNow(),
   updatedAt: time("updated_at").notNull().defaultNow(),
 });
+
+
+export const passkey = pgTable("passkey", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  publicKey: text("public_key").notNull(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  credentialID: text("credential_id").notNull(),
+  counter: integer("counter").notNull(),
+  deviceType: text("device_type").notNull(),
+  backedUp: boolean("backed_up").notNull(),
+  transports: text("transports"),
+  createdAt: time("created_at"),
+  aaguid: text("aaguid"),
+}, (t) => [
+  index("passkey_userId_idx").on(t.userId),
+  index("passkey_credentialID_idx").on(t.credentialID),
+]);
 
 export const studies = pgTable("studies", {
   id: text("id").primaryKey(),
