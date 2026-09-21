@@ -1,7 +1,33 @@
 import { UploadForm } from "../components/upload-form";
+
 export default function Home() {
-  return <main><p className="tracking-widest text-sm">VALOSTUDY / PLAY. STUDY. REPEAT.</p>
-    <h1>録画を、次の判断の材料へ。</h1>
-    <p>設定とプレイの証拠をひとつのStudyに。フレームとプロンプトをCodexへ渡し、調べてから振り返る。</p>
-    <UploadForm /></main>;
+  return <main className="site-shell">
+    <header className="hero">
+      <div className="brand-row">
+        <p className="brand"><span className="brand-mark">VS</span> VALOSTUDY</p>
+        <span className="brand-meta">PLAY · STUDY · REPEAT</span>
+      </div>
+
+      <div className="hero-grid">
+        <div>
+          <p className="eyebrow">VALORANT GAMEPLAY EVIDENCE</p>
+          <h1>試合を、<br />判断できる材料へ。</h1>
+          <p className="hero-lead">
+            試合全体の録画とプレイヤー設定をひとつのStudyに。
+            全体をフレーム化し、AIがURLから直接検証できる証拠へ変換します。
+          </p>
+        </div>
+        <aside className="hero-note">
+          <p className="hero-note-label">FULL MATCH PIPELINE</p>
+          <strong>Upload → Sample → Study</strong>
+          <p>
+            元動画は処理のためだけに一時保持。フレーム保存が完了したら削除し、
+            コーチングに必要な情報だけを残します。
+          </p>
+        </aside>
+      </div>
+    </header>
+
+    <UploadForm />
+  </main>;
 }
