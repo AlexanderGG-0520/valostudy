@@ -1,6 +1,6 @@
 # ValoStudy
 
-VALORANTの試合全体の録画とプレイヤー設定からコーチング用フレームを抽出し、AIがURLで取得できるStudyページ・JSON manifestを作るSaaS基盤です。元動画は処理中だけ一時保持し、フレーム保存完了後に削除します。AIの自動実行は行いません。
+VALORANTの試合全体の録画とプレイヤー設定からコーチング用フレームを抽出し、AIがURLで取得できるStudyページ・VCMR（ValoStudy Canonical Match Representation）・互換JSON manifestを作るSaaS基盤です。元動画は処理中だけ一時保持し、フレーム保存完了後に削除します。AIの自動実行は行いません。
 
 ## Architecture
 
@@ -14,7 +14,8 @@ Browser ── JSON / session ── Next.js control plane ── PostgreSQL
                                   └── JPEG ── Worker ← BullMQ / Valkey
                                                 │
                                            FFprobe / FFmpeg
-AI → /{id} → /{id}/manifest.json → /{id}/frames/000001.jpg
+AI → /{id} → /{id}/canonical.json (VCMR) → /{id}/frames/000001.jpg
+                   └→ /{id}/manifest.json (legacy projection)
 ```
 
 Next.jsは認証、Stripe課金、entitlement、Study作成、uploadの署名と完了通知、閲覧を担当します。動画本体はブラウザからstorageへ直接送信します。FFmpegは独立Workerのみで実行します。完了通知でDBにjobを記録し、Worker内dispatcherが10秒ごとにBullMQへ投入するため、投入前の障害から復旧できます。
@@ -25,7 +26,7 @@ Next.jsは認証、Stripe課金、entitlement、Study作成、uploadの署名と
 |---|---|
 | apps/web | Next.js App Router、TypeScript、Tailwind、shadcn/ui Button、Better Auth |
 | apps/worker | BullMQ dispatcher / processor、FFprobe / FFmpeg |
-| packages/schema | Zod: Study ID、設定、入力、状態、manifest、prompt、job |
+| packages/schema | Zod: VCMR canonical schema、Study ID、設定、入力、状態、manifest互換projection、prompt、job |
 | packages/db | PostgreSQL、Drizzle、SQL migrations、ID生成 |
 | packages/storage | S3-compatible multipart・object・frame操作 |
 | packages/prompts | versioned JSON template、snapshot rendering |
@@ -141,6 +142,9 @@ curl -H "Authorization: Bearer vsk_..." \
   https://valostudy.example.com/api/v1/studies
 
 curl -H "Authorization: Bearer vsk_..." \
+  https://valostudy.example.com/api/v1/studies/3fa91bc72de/canonical
+
+curl -H "Authorization: Bearer vsk_..." \
   https://valostudy.example.com/api/v1/studies/3fa91bc72de/manifest
 
 curl -H "Authorization: Bearer vsk_..." \
@@ -190,10 +194,13 @@ runnerが専用Compose projectでPostgreSQL 17、Valkey 8、MinIOを起動し、
 Study IDは `crypto.randomBytes(6)` から作る11文字lowercase hex（44bit）、正規表現は `^[0-9a-f]{11}$`。DBのPRIMARY KEYとCHECKで保証し、衝突は最大8回まで再生成します。IDは認証tokenではありません。
 
 - Study: `https://valostudy.example.com/3fa91bc72de`
-- Manifest: `/3fa91bc72de/manifest.json`
+- Canonical VCMR: `/3fa91bc72de/canonical.json`
+- Manifest (legacy projection): `/3fa91bc72de/manifest.json`
 - Frame: `/3fa91bc72de/frames/000001.jpg`
 
-manifestはschemaVersion、studyId、player、frames、coachingProtocol、promptを含むZod schemaで管理します。内部object keyを含めません。frame routeがowner/public認可後にJPEGを配信します。既存StudyのWebPも後方互換で配信します。元動画をWeb経由で配信するrouteはありません。private取得にはowner cookieが必要です。
+VCMR v1 (`valostudy.vcmr@1.0.0`) がStudyの正規表現です。現在のWorkerはmedia metadataとfixed-rate sampled frame evidenceをVCMRへ正規化し、PostgreSQL/object storageへ分割して永続化します。Web/APIはその正規化データからVCMR documentを決定的に組み立てます。既存manifestはVCMRから生成する互換projectionとして維持します。詳細は `docs/vcmr-v1.md` を参照してください。
+
+VCMRとmanifestは内部object keyを含めません。frame routeがowner/public認可後にJPEGを配信します。既存StudyのWebPも後方互換で配信します。元動画をWeb経由で配信するrouteはありません。private取得にはowner cookieが必要です。
 
 ## Storage / queue / processing
 
