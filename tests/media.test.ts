@@ -8,7 +8,7 @@ it("probes and extracts the entire real video into full-resolution timestamped W
   const dir = await mkdtemp(join(tmpdir(), "valostudy-test-"));
   const previousProcesses = process.env.WORKER_FFMPEG_PROCESSES;
   const previousThreads = process.env.WORKER_FFMPEG_THREADS;
-  process.env.WORKER_FFMPEG_PROCESSES = "4";
+  process.env.WORKER_FFMPEG_PROCESSES = "8";
   process.env.WORKER_FFMPEG_THREADS = "8";
   try {
     const source = join(dir, "fixture.mp4");
