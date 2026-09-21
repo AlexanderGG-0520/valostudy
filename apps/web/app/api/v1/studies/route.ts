@@ -1,6 +1,6 @@
-import { apiOwner } from "../../../lib/api-auth";
-import { listOwnedStudies } from "../../../lib/comparisons";
-import { handle } from "../../../lib/http";
+import { apiOwner } from "../../../../lib/api-auth";
+import { listOwnedStudies } from "../../../../lib/comparisons";
+import { handle } from "../../../../lib/http";
 
 export const runtime = "nodejs";
 
