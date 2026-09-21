@@ -28,6 +28,7 @@ import { buildComparisonManifest, createComparison } from "../apps/web/lib/compa
 import { apiOwner, createApiKey, revokeApiKey } from "../apps/web/lib/api-auth";
 import { assignStudy, buildClientManifest, createClient, deleteClient, listClients } from "../apps/web/lib/workspace";
 import { processVideo } from "../apps/worker/src/process";
+import { billingStatus, currentPlan } from "../apps/web/lib/billing";
 import { runProcess } from "../apps/worker/src/media";
 import { GET as frameGET } from "../apps/web/app/[id]/frames/[name]/route";
 import * as schema from "@valostudy/db/schema";
@@ -53,6 +54,21 @@ beforeEach(async () => {
   state.parts.mockResolvedValue([{ PartNumber: 1, ETag: "etag", Size: input.video.size }]);
   state.complete.mockResolvedValue({});
 });
+it("grants the designated developer account Pro without a Stripe subscription", async () => {
+  await database.update(schema.user).set({ email: "uket.panda.1st@gmail.com" })
+    .where(eq(schema.user.id, "owner"));
+
+  expect(await currentPlan("owner")).toBe("pro");
+  expect(await billingStatus("owner")).toMatchObject({
+    plan: "pro",
+    entitlementSource: "developer",
+    subscription: null,
+  });
+
+  const study = await createStudy("owner", { ...input, processing: { fps: 5 as const } });
+  expect(study.plan).toBe("pro");
+});
+
 it("enforces Free media limits and snapshots an active Plus entitlement", async () => {
   await expect(createStudy("owner", { ...input, processing: { fps: 2 as const } }))
     .rejects.toMatchObject({ status: 403 });
