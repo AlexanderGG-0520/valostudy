@@ -36,6 +36,13 @@
       "when": 1790022000000,
       "tag": "0004_payment_link_intents",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790042400000,
+      "tag": "0005_processing_progress",
+      "breakpoints": true
     }
   ]
 }
