@@ -15,6 +15,27 @@
       "when": 1790009762439,
       "tag": "0001_nasty_whirlwind",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790019600000,
+      "tag": "0002_billing_entitlements",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790020800000,
+      "tag": "0003_paid_features",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790022000000,
+      "tag": "0004_payment_link_intents",
+      "breakpoints": true
     }
   ]
 }

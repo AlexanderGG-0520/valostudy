@@ -32,6 +32,13 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
 
     <a className="study-link" href={`/${id}/manifest.json`}>manifest.json を開く <span>→</span></a>
 
+    {m.framesExpiredAt && <section className="study-card retention-expired">
+      <h2>フレーム保持期間が終了しました</h2>
+      <p>
+        保存期限に達したためWebPフレームは削除されています。Study metadataとコーチングプロンプトは残っています。
+      </p>
+    </section>}
+
     <section className="study-card">
       <h2>プレイヤー設定</h2>
       <pre>{JSON.stringify(m.player, null, 2)}</pre>

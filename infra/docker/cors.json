@@ -2,8 +2,7 @@
   "CORSRules": [
     {
       "AllowedOrigins": [
-        "http://localhost:3000",
-        "https://valostudy.alec-ofc.com"
+        "http://localhost:3000"
       ],
       "AllowedMethods": [
         "PUT"
@@ -15,7 +14,7 @@
       "ExposeHeaders": [
         "ETag"
       ],
-      "MaxAgeSeconds": 3600
+      "MaxAgeSeconds": 300
     }
   ]
 }

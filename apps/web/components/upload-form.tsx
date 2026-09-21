@@ -1,16 +1,19 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { createAuthClient } from "better-auth/react";
-import {
-  MAX_EXTRACTED_FRAMES,
-  MAX_UPLOAD_BYTES,
-  MAX_VIDEO_SECONDS,
-  studyCreationSchema,
-} from "@valostudy/schema";
+import { PLAN_LIMITS, studyCreationSchema, type Plan } from "@valostudy/schema";
 import { Button } from "./ui/button";
 
 const authClient = createAuthClient();
+
+type BillingStatus = {
+  plan: Plan;
+  usage: {
+    canCreate: boolean;
+    nextAvailableAt: string | null;
+  };
+};
 
 async function jsonRequest(url: string, body?: unknown) {
   const response = await fetch(url, {
@@ -77,6 +80,27 @@ export function UploadForm() {
   const [studyUrl, setStudyUrl] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const sessionUserId = session?.user.id;
+  const limits = PLAN_LIMITS[billing?.plan ?? "free"];
+
+  async function refreshBilling() {
+    if (!sessionUserId) {
+      setBilling(null);
+      return;
+    }
+    const response = await fetch("/api/billing/status", { cache: "no-store" });
+    if (response.ok) setBilling(await response.json() as BillingStatus);
+  }
+
+  useEffect(() => {
+    let active = true;
+    if (!sessionUserId) return;
+    void fetch("/api/billing/status", { cache: "no-store" }).then(async (response) => {
+      if (active && response.ok) setBilling(await response.json() as BillingStatus);
+    });
+    return () => { active = false; };
+  }, [sessionUserId]);
 
   async function authenticate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -111,15 +135,21 @@ export function UploadForm() {
     try {
       const file = data.get("video");
       if (!(file instanceof File) || !file.size) throw new Error("試合録画を選択してください");
-      if (file.size > MAX_UPLOAD_BYTES)
-        throw new Error(`動画は最大 ${MAX_UPLOAD_BYTES / 1024 ** 3} GiB です`);
+      if (billing?.usage.canCreate === false)
+        throw new Error(billing.usage.nextAvailableAt
+          ? `次のStudyは ${new Date(billing.usage.nextAvailableAt).toLocaleString("ja-JP")} から作成できます`
+          : "現在のプラン上限に達しています");
+      if (file.size > limits.maxUploadBytes)
+        throw new Error(`このプランでは動画は最大 ${limits.maxUploadBytes / 1024 ** 3} GiB です`);
 
       const fps = Number(data.get("fps"));
+      if (fps > limits.maxFps)
+        throw new Error(`このプランでは最大 ${limits.maxFps} FPS です`);
       const duration = await browserVideoDuration(file);
       if (duration !== null) {
-        if (duration > MAX_VIDEO_SECONDS)
-          throw new Error("録画は2時間以内にしてください");
-        if (Math.ceil(duration * fps) > MAX_EXTRACTED_FRAMES)
+        if (duration > limits.maxVideoSeconds)
+          throw new Error(`このプランでは録画は最大 ${limits.maxVideoSeconds / 3600} 時間です`);
+        if (Math.ceil(duration * fps) > limits.maxFrames)
           throw new Error("この録画ではフレーム数が多すぎます。抽出間隔を長くしてください");
       }
 
@@ -190,6 +220,7 @@ export function UploadForm() {
       await jsonRequest(`/api/uploads/${created.studyId}/complete`);
       setUploadProgress(100);
       setMessage("アップロード完了。処理後、元動画は自動で削除されます。");
+      await refreshBilling();
     } catch (e) {
       setUploadProgress(0);
       setMessage(e instanceof Error ? e.message : "アップロード失敗");
@@ -338,10 +369,10 @@ export function UploadForm() {
         </div>
 
         <label className="file-field">
-          <span className="field-label">試合全体の録画（最大16 GiB）</span>
+          <span className="field-label">試合全体の録画（最大{limits.maxUploadBytes / 1024 ** 3} GiB）</span>
           <input
             name="video"
-            aria-label="試合全体の録画（最大16 GiB）"
+            aria-label={`試合全体の録画（最大${limits.maxUploadBytes / 1024 ** 3} GiB）`}
             type="file"
             accept=".mp4,.mkv,.mov,.webm,.avi"
             required
@@ -350,7 +381,7 @@ export function UploadForm() {
           <span className="file-meta">
             {selectedFile
               ? `${selectedFile.name} · ${formatBytes(selectedFile.size)}`
-              : "MP4 / MKV / MOV / WebM / AVI · 最大2時間"}
+              : `MP4 / MKV / MOV / WebM / AVI · 最大${limits.maxVideoSeconds / 3600}時間`}
           </span>
         </label>
 
@@ -369,8 +400,10 @@ export function UploadForm() {
               <option value="0.25">4秒ごと · 軽量</option>
               <option value="0.5">2秒ごと · 推奨</option>
               <option value="1">1秒ごと · 高密度</option>
+              {limits.maxFps >= 2 && <option value="2">0.5秒ごと · Plus high density</option>}
+              {limits.maxFps >= 5 && <option value="5">0.2秒ごと · Pro maximum</option>}
             </select>
-            <span className="field-hint">最大 {MAX_EXTRACTED_FRAMES.toLocaleString()} フレーム。長い録画では間隔を長くしてください。</span>
+            <span className="field-hint">このプランは最大 {limits.maxFps} FPS / {limits.maxFrames.toLocaleString()} フレーム。</span>
           </label>
           <label>
             <span className="field-label">公開範囲</span>
@@ -394,10 +427,15 @@ export function UploadForm() {
             <span className="submit-kicker">READY WHEN YOU ARE</span>
             <p>Study作成後、ブラウザからストレージへ直接アップロードします。</p>
           </div>
-          <Button className="primary-button submit-button" disabled={busy}>
-            {busy ? "処理中…" : "試合全体をStudyにする"}
+          <Button className="primary-button submit-button" disabled={busy || billing?.usage.canCreate === false}>
+            {busy ? "処理中…" : billing?.usage.canCreate === false ? "Cooldown / Limit" : "試合全体をStudyにする"}
           </Button>
         </div>
+        {billing?.usage.canCreate === false && <p className="quota-warning">
+          {billing.usage.nextAvailableAt
+            ? `次のStudy作成: ${new Date(billing.usage.nextAvailableAt).toLocaleString("ja-JP")}`
+            : "現在のプラン上限に達しています。"}
+        </p>}
       </fieldset>
     </form>
 

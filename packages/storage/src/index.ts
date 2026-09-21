@@ -1,13 +1,15 @@
 import {
   S3Client, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand, ListPartsCommand, HeadObjectCommand, GetObjectCommand,
-  PutObjectCommand, DeleteObjectCommand,
+  PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { studyIdSchema, frameNameSchema, PART_BYTES } from "@valostudy/schema";
 import { config } from "@valostudy/config";
 
-export function sourceKey(id: string) { return `studies/${studyIdSchema.parse(id)}/source`; }
+export function sourceKey(id: string) {
+  return `studies/${studyIdSchema.parse(id)}/source`;
+}
 
 export function frameKey(id: string, name: string) {
   return `studies/${studyIdSchema.parse(id)}/frames/${frameNameSchema.parse(name)}`;
@@ -64,7 +66,11 @@ export class Storage {
 
   partUrl(key: string, uploadId: string, part: number, size: number, expiresIn: number) {
     return storageOperation("UploadPartPresign", () => getSignedUrl(this.client, new UploadPartCommand({
-      Bucket: this.bucket, Key: key, UploadId: uploadId, PartNumber: part, ContentLength: size,
+      Bucket: this.bucket,
+      Key: key,
+      UploadId: uploadId,
+      PartNumber: part,
+      ContentLength: size,
     }), { expiresIn, signableHeaders: new Set(["content-length"]) }));
   }
 
@@ -83,7 +89,10 @@ export class Storage {
   complete(key: string, uploadId: string, parts: { PartNumber: number; ETag: string }[]) {
     return storageOperation("CompleteMultipartUpload", () => this.client.send(
       new CompleteMultipartUploadCommand({
-        Bucket: this.bucket, Key: key, UploadId: uploadId, MultipartUpload: { Parts: parts },
+        Bucket: this.bucket,
+        Key: key,
+        UploadId: uploadId,
+        MultipartUpload: { Parts: parts },
       }),
     ));
   }
@@ -119,5 +128,16 @@ export class Storage {
     return storageOperation("DeleteObject", () => this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     ));
+  }
+
+  async deleteMany(keys: string[]) {
+    for (let offset = 0; offset < keys.length; offset += 1000) {
+      const batch = keys.slice(offset, offset + 1000);
+      if (!batch.length) continue;
+      await storageOperation("DeleteObjects", () => this.client.send(new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: { Quiet: true, Objects: batch.map((Key) => ({ Key })) },
+      })));
+    }
   }
 }

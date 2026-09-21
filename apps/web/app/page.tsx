@@ -1,4 +1,8 @@
 import { UploadForm } from "../components/upload-form";
+import { BillingPanel } from "../components/billing-panel";
+import { StudyLibrary } from "../components/study-library";
+import { ProApiPanel } from "../components/pro-api-panel";
+import { CoachWorkspace } from "../components/coach-workspace";
 
 export default function Home() {
   return <main className="site-shell">
@@ -28,6 +32,10 @@ export default function Home() {
       </div>
     </header>
 
+    <BillingPanel />
     <UploadForm />
+    <StudyLibrary />
+    <CoachWorkspace />
+    <ProApiPanel />
   </main>;
 }
