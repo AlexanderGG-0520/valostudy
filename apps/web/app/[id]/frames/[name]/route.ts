@@ -17,8 +17,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (!frame) throw new HttpError(404, "Frame not found");
     const object = await new Storage().get(frame.objectKey);
     if (!object.Body) throw new HttpError(404, "Frame not found");
+    const contentType = name.endsWith(".jpg") ? "image/jpeg" : "image/webp";
     return new Response(object.Body.transformToWebStream(), { headers: {
-      "Content-Type": "image/webp", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+      "Content-Type": contentType, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
     } });
   });
 }
