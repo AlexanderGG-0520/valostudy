@@ -59,16 +59,39 @@ it("requires email verification before password login, then authenticates and si
     body: JSON.stringify(body),
   });
 
+  const rejectedConsent = await auth().handler(request("sign-up/email", {
+    name: "Player",
+    email: "player@example.test",
+    password,
+    callbackURL: "/account",
+  }));
+  expect(rejectedConsent.status).toBe(400);
+  expect(await rejectedConsent.json()).toMatchObject({
+    message: "利用規約とプライバシーポリシーへの同意が必要です",
+  });
+
   const signup = await auth().handler(request("sign-up/email", {
     name: "Player",
     email: "player@example.test",
     password,
+    termsAccepted: true,
+    privacyAccepted: true,
     callbackURL: "/account",
   }));
   expect(signup.status).toBe(200);
   expect(signup.headers.getSetCookie().join(";")).not.toContain("session_token");
   await vi.waitFor(() => expect(verificationUrl).toMatch(/^http:\/\/localhost:3000\/api\/auth\/verify-email/));
   expect(mail).toHaveBeenCalledTimes(1);
+
+  const consent = await pg.query<{ terms_accepted: boolean; privacy_accepted: boolean; legal_version: string; legal_accepted_at: Date }>(
+    "select terms_accepted, privacy_accepted, legal_version, legal_accepted_at from users where email = 'player@example.test'",
+  );
+  expect(consent.rows[0]).toMatchObject({
+    terms_accepted: true,
+    privacy_accepted: true,
+    legal_version: "2026-09-22",
+  });
+  expect(consent.rows[0]?.legal_accepted_at).toBeTruthy();
 
   const unverified = await auth().handler(request("sign-in/email", {
     email: "player@example.test",
