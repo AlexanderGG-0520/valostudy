@@ -12,7 +12,6 @@ import { config, log } from "@valostudy/config";
 import { extract } from "./media";
 
 const DAY = 24 * 60 * 60 * 1000;
-const FRAME_UPLOAD_CONCURRENCY = config().WORKER_FRAME_UPLOAD_CONCURRENCY;
 const FRAME_DB_BATCH_SIZE = 1000;
 
 async function forEachConcurrent<T>(
@@ -130,13 +129,14 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
 
     stage = "persist";
     const persistStarted = Date.now();
+    const frameUploadConcurrency = config().WORKER_FRAME_UPLOAD_CONCURRENCY;
     const rows: (typeof frames.$inferInsert)[] = result.frames.map((frame) => ({
       ...frame,
       studyId: id,
       objectKey: frameKey(id, frame.name),
     }));
 
-    await forEachConcurrent(rows, FRAME_UPLOAD_CONCURRENCY, async (frame) => {
+    await forEachConcurrent(rows, frameUploadConcurrency, async (frame) => {
       await storage.putFrame(frame.objectKey, await readFile(join(output, frame.name)));
     });
 
@@ -146,7 +146,7 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
       stage,
       duration: Date.now() - persistStarted,
       frameCount: rows.length,
-      concurrency: FRAME_UPLOAD_CONCURRENCY,
+      concurrency: frameUploadConcurrency,
     });
 
     const completedAt = new Date();
