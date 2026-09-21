@@ -28,7 +28,7 @@ export async function createStudy(ownerId: string, input: StudyCreation) {
     uploadId = await storage.create(sourceKey(result.id), input.video.mimeType);
     await db().insert(uploads).values({
       studyId: result.id, objectKey: sourceKey(result.id), uploadId,
-      expectedBytes: input.video.size, expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      expectedBytes: input.video.size, expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000),
     });
   } catch (e) {
     if (uploadId) await storage.abort(sourceKey(result.id), uploadId).catch(() => undefined);
