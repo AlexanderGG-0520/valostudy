@@ -65,7 +65,26 @@ AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
   --bucket "$S3_BUCKET" --cors-configuration file://infra/docker/cors.json
 ```
 
-MinIOのバージョンがbucket CORS APIをサポートしない場合は `MINIO_API_CORS_ALLOW_ORIGIN=http://localhost:3000` を使用してください。R2では実際のWeb originのみ許可します。未完了multipartを1日後にabortするbucket lifecycleも設定してください（DB保存前のクラッシュで残ったsession回収用）。
+MinIOのバージョンがbucket CORS APIをサポートしない場合は `MINIO_API_CORS_ALLOW_ORIGIN=http://localhost:3000` を使用してください。R2ではブラウザからpresigned URLへ直接PUTするため、bucket CORSに本番origin `https://valostudy.alec-ofc.com` を正確に許可する必要があります（末尾スラッシュなし）。`infra/docker/cors.json` はlocalhostと本番originの両方を許可します。
+
+R2へ反映・確認する例:
+
+```bash
+AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" \
+AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+AWS_DEFAULT_REGION=auto \
+aws --endpoint-url "$S3_ENDPOINT" s3api put-bucket-cors \
+  --bucket "$S3_BUCKET" \
+  --cors-configuration file://infra/docker/cors.json
+
+AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" \
+AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+AWS_DEFAULT_REGION=auto \
+aws --endpoint-url "$S3_ENDPOINT" s3api get-bucket-cors \
+  --bucket "$S3_BUCKET"
+```
+
+未完了multipartを1日後にabortするbucket lifecycleも設定してください（DB保存前のクラッシュで残ったsession回収用）。
 
 ## Environment variables
 
