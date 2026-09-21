@@ -181,8 +181,6 @@ export function UploadForm() {
         partBytes: number;
         partCount: number;
       };
-      setStudyUrl(created.url);
-
       let nextPart = 1;
       let completedParts = 0;
       const uploadPart = async (part: number) => {
@@ -216,10 +214,11 @@ export function UploadForm() {
         }
       }));
 
-      setMessage("アップロード完了。試合全体からフレームを生成しています。");
+      setMessage("アップロード完了。フレーム生成キューへ登録しています。");
       await jsonRequest(`/api/uploads/${created.studyId}/complete`);
+      setStudyUrl(created.url);
       setUploadProgress(100);
-      setMessage("アップロード完了。処理後、元動画は自動で削除されます。");
+      setMessage("アップロード完了。Studyページで処理状況を確認できます。処理完了後、元動画は自動で削除されます。");
       await refreshBilling();
     } catch (e) {
       setUploadProgress(0);

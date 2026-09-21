@@ -32,6 +32,7 @@ import { billingStatus, currentPlan } from "../apps/web/lib/billing";
 import { createPaymentLinkCheckout, processStripeEvent } from "../apps/web/lib/stripe";
 import { runProcess } from "../apps/worker/src/media";
 import { GET as frameGET } from "../apps/web/app/[id]/frames/[name]/route";
+import { GET as manifestGET } from "../apps/web/app/[id]/manifest.json/route";
 import * as schema from "@valostudy/db/schema";
 import { eq } from "drizzle-orm";
 let pg: PGlite;
@@ -314,6 +315,30 @@ it("migrates real SQL, creates Study + snapshot, and enforces private ownership"
   expect(m.prompt).toContain("Platinum 3");
   expect(m.frames).toEqual([]);
   await expect(ownedUpload(study.id, "other")).rejects.toMatchObject({ status: 404 });
+});
+it("signals public manifests as processing until frame evidence is ready", async () => {
+  const study = await createStudy("owner", input);
+  state.getSession.mockResolvedValue(null);
+  const request = new Request(`http://localhost/${study.id}/manifest.json`);
+  const params = Promise.resolve({ id: study.id });
+
+  const processing = await manifestGET(request, { params });
+  expect(processing.status).toBe(202);
+  expect(processing.headers.get("retry-after")).toBe("5");
+  expect((await processing.json()).frames).toEqual([]);
+
+  await database.insert(schema.frames).values({
+    studyId: study.id,
+    name: "000001.webp",
+    objectKey: "internal/frame",
+    timestampMs: 0,
+  });
+  await database.update(schema.studies).set({ status: "completed" }).where(eq(schema.studies.id, study.id));
+
+  const completed = await manifestGET(request, { params: Promise.resolve({ id: study.id }) });
+  expect(completed.status).toBe(200);
+  expect(completed.headers.get("retry-after")).toBeNull();
+  expect((await completed.json()).frames).toHaveLength(1);
 });
 it("serves a public manifest with stable prompt snapshots", async () => {
   const study = await createStudy("owner", input);

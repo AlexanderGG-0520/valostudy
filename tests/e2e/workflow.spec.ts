@@ -28,8 +28,14 @@ async function terminal(request: APIRequestContext, id: string, status: "complet
   let result: Manifest | undefined;
   await expect.poll(async () => {
     const response = await request.get("/" + id + "/manifest.json");
-    expect(response.status()).toBe(200);
+    expect([200, 202]).toContain(response.status());
     result = manifestSchema.parse(await response.json());
+    if (response.status() === 202) {
+      expect(response.headers()["retry-after"]).toBe("5");
+      expect(["pending", "queued", "processing"]).toContain(result.status);
+    } else if (result.status === status) {
+      expect(response.status()).toBe(200);
+    }
     return result.status;
   }, { timeout: 90000, intervals: [500, 1000, 2000] }).toBe(status);
   return result!;

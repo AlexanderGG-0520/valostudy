@@ -7,6 +7,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   return handle(async () => {
     const session = await auth().api.getSession({ headers: request.headers });
     const manifest = await buildManifest((await context.params).id, session?.user.id);
-    return Response.json(manifest, { headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+    const processing = manifest.status === "pending" || manifest.status === "queued" || manifest.status === "processing";
+    return Response.json(manifest, {
+      status: processing ? 202 : 200,
+      headers: {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        ...(processing ? { "Retry-After": "5" } : {}),
+      },
+    });
   });
 }
