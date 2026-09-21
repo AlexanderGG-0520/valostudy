@@ -23,6 +23,7 @@ export const PLAN_LIMITS = {
     rollingStudyLimit: null,
     publicStudyLimitLabel: "1 Study / 6h cooldown",
     compareLimit: 0,
+    clientLimit: 0,
     apiAccess: false,
   },
   plus: {
@@ -39,6 +40,7 @@ export const PLAN_LIMITS = {
     rollingStudyLimit: 30,
     publicStudyLimitLabel: "30 Studies / rolling 7 days",
     compareLimit: 20,
+    clientLimit: 0,
     apiAccess: false,
   },
   pro: {
@@ -56,6 +58,7 @@ export const PLAN_LIMITS = {
     rollingStudyLimit: 500,
     publicStudyLimitLabel: "Unlimited Studies (fair use)",
     compareLimit: 100,
+    clientLimit: 100,
     apiAccess: true,
   },
 } as const satisfies Record<Plan, {
@@ -72,6 +75,7 @@ export const PLAN_LIMITS = {
   rollingStudyLimit: number | null;
   publicStudyLimitLabel: string;
   compareLimit: number;
+  clientLimit: number;
   apiAccess: boolean;
 }>;
 
