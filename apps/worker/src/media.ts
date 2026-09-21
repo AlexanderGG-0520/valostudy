@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+import { config } from "@valostudy/config";
 import {
   MAX_EXTRACTED_FRAMES,
   MAX_VIDEO_SECONDS,
@@ -76,12 +77,13 @@ export async function extract(
     Math.max(30 * 60 * 1000, Math.ceil(metadata.duration * 2 * 1000)),
   );
 
+  const threads = config().WORKER_FFMPEG_THREADS;
   await runProcess("ffmpeg", [
-    "-nostdin", "-v", "error", "-threads", "2", ...inputOptions,
+    "-nostdin", "-v", "error", "-threads", String(threads), ...inputOptions,
     "-i", path,
     "-map", "0:v:0", "-an", "-sn", "-dn",
     "-vf", `fps=${o.fps},scale=w='min(1920,iw)':h=-2`,
-    "-c:v", "libwebp", "-threads", "2",
+    "-c:v", "libwebp", "-threads", String(threads),
     "-frames:v", String(limits.maxFrames),
     "-q:v", "80", "-n", join(directory, "%06d.webp"),
   ], ffmpegTimeoutMs);
