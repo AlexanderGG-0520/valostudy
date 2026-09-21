@@ -1,5 +1,7 @@
 import { UploadForm } from "../components/upload-form";
 import { BillingPanel } from "../components/billing-panel";
+import { StudyLibrary } from "../components/study-library";
+import { ProApiPanel } from "../components/pro-api-panel";
 
 export default function Home() {
   return <main className="site-shell">
@@ -31,5 +33,7 @@ export default function Home() {
 
     <BillingPanel />
     <UploadForm />
+    <StudyLibrary />
+    <ProApiPanel />
   </main>;
 }
