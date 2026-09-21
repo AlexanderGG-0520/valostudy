@@ -17,3 +17,11 @@ ALTER TABLE "passkey" ADD CONSTRAINT "passkey_user_id_users_id_fk" FOREIGN KEY (
 CREATE INDEX "passkey_userId_idx" ON "passkey" USING btree ("user_id");
 --> statement-breakpoint
 CREATE INDEX "passkey_credentialID_idx" ON "passkey" USING btree ("credential_id");
+--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN "terms_accepted" boolean DEFAULT false NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN "privacy_accepted" boolean DEFAULT false NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN "legal_accepted_at" timestamp with time zone;
+--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN "legal_version" text;
