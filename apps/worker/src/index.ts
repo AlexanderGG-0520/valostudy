@@ -1,5 +1,5 @@
 import { Queue, Worker } from "bullmq";
-import { db, jobs, studies, uploads, frames, eq, inArray, and, sql } from "@valostudy/db";
+import { db, jobs, studies, uploads, frames, usageEvents, eq, inArray, and, isNull, sql } from "@valostudy/db";
 import { PLAN_LIMITS } from "@valostudy/schema";
 import { config, redisConnection, QUEUE_NAME, log } from "@valostudy/config";
 import { Storage } from "@valostudy/storage";
@@ -36,6 +36,10 @@ async function reconcile() {
         }).where(and(eq(jobs.studyId, study.id), inArray(jobs.status, ["pending", "queued", "processing"])));
         await tx.update(studies).set({ status: "failed" })
           .where(and(eq(studies.id, study.id), inArray(studies.status, ["queued", "processing"])));
+        await tx.update(usageEvents).set({ releasedAt: new Date() }).where(and(
+          eq(usageEvents.studyId, study.id),
+          isNull(usageEvents.releasedAt),
+        ));
       });
     } else if (!queued) {
       await db().update(jobs).set({ status: "queued", updatedAt: new Date() })
