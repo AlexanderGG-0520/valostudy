@@ -1,9 +1,20 @@
-import { db, billingSubscriptions, usageEvents, eq, and, isNull, gte, desc } from "@valostudy/db";
+import { createHash } from "node:crypto";
+import { db, billingSubscriptions, usageEvents, user, eq, and, isNull, gte, desc } from "@valostudy/db";
 import { PLAN_LIMITS, type Plan, type StudyCreation } from "@valostudy/schema";
 import { HttpError } from "./http";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
+
+// Keep privileged developer identities out of the repository as plaintext.
+// This is SHA-256(lowercase(trim(email))) for the designated developer account.
+const DEVELOPER_PRO_EMAIL_HASHES = new Set([
+  "ead51cab682dca2e4e1a755eca29b222e26cf333b5f9d2171e0f3d0097a48064",
+]);
+
+function emailHash(email: string) {
+  return createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+}
 
 function paidPlanActive(status: string, currentPeriodEnd: Date | null, now: Date) {
   if (status === "active" || status === "trialing") return true;
@@ -16,13 +27,38 @@ function paidPlanActive(status: string, currentPeriodEnd: Date | null, now: Date
   return false;
 }
 
+async function resolveEntitlement(userId: string, now: Date) {
+  const [[account], [subscription]] = await Promise.all([
+    db().select({ email: user.email }).from(user).where(eq(user.id, userId)),
+    db().select().from(billingSubscriptions).where(eq(billingSubscriptions.userId, userId)),
+  ]);
+
+  if (account && DEVELOPER_PRO_EMAIL_HASHES.has(emailHash(account.email))) {
+    return {
+      plan: "pro" as const,
+      entitlementSource: "developer" as const,
+      subscription,
+    };
+  }
+
+  if (subscription && subscription.plan !== "free"
+    && paidPlanActive(subscription.status, subscription.currentPeriodEnd, now)) {
+    return {
+      plan: subscription.plan,
+      entitlementSource: "stripe" as const,
+      subscription,
+    };
+  }
+
+  return {
+    plan: "free" as const,
+    entitlementSource: "free" as const,
+    subscription,
+  };
+}
+
 export async function currentPlan(userId: string, now = new Date()): Promise<Plan> {
-  const [subscription] = await db().select().from(billingSubscriptions)
-    .where(eq(billingSubscriptions.userId, userId));
-  if (!subscription || subscription.plan === "free") return "free";
-  return paidPlanActive(subscription.status, subscription.currentPeriodEnd, now)
-    ? subscription.plan
-    : "free";
+  return (await resolveEntitlement(userId, now)).plan;
 }
 
 export function assertPlanInput(plan: Plan, input: StudyCreation) {
@@ -34,10 +70,9 @@ export function assertPlanInput(plan: Plan, input: StudyCreation) {
 }
 
 export async function billingStatus(userId: string, now = new Date()) {
-  const plan = await currentPlan(userId, now);
+  const entitlement = await resolveEntitlement(userId, now);
+  const { plan, subscription, entitlementSource } = entitlement;
   const limits = PLAN_LIMITS[plan];
-  const [subscription] = await db().select().from(billingSubscriptions)
-    .where(eq(billingSubscriptions.userId, userId));
 
   let used = 0;
   let canCreate = true;
@@ -75,6 +110,7 @@ export async function billingStatus(userId: string, now = new Date()) {
 
   return {
     plan,
+    entitlementSource,
     limits,
     usage: {
       used,
