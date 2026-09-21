@@ -80,19 +80,19 @@ export function BillingPanel() {
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<Plan | "portal" | null>(null);
+  const sessionUserId = session?.user.id;
 
-  async function refresh() {
-    if (!session) {
+  useEffect(() => {
+    let active = true;
+    if (!sessionUserId) {
       setBilling(null);
       return;
     }
-    const response = await fetch("/api/billing/status", { cache: "no-store" });
-    if (response.ok) setBilling(await response.json() as BillingStatus);
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, [session?.user.id]);
+    void fetch("/api/billing/status", { cache: "no-store" }).then(async (response) => {
+      if (active && response.ok) setBilling(await response.json() as BillingStatus);
+    });
+    return () => { active = false; };
+  }, [sessionUserId]);
 
   async function post(url: string, body?: unknown) {
     setMessage("");
