@@ -15,6 +15,10 @@ export const user = pgTable("users", {
   image: text("image"),
   createdAt: time("created_at").notNull().defaultNow(),
   updatedAt: time("updated_at").notNull().defaultNow(),
+  termsAccepted: boolean("terms_accepted").notNull().default(false),
+  privacyAccepted: boolean("privacy_accepted").notNull().default(false),
+  legalAcceptedAt: time("legal_accepted_at"),
+  legalVersion: text("legal_version"),
 });
 
 export const session = pgTable("sessions", {
