@@ -6,7 +6,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { Job } from "bullmq";
 import { db, studies, jobs, uploads, frames, usageEvents, eq, and, inArray, isNull } from "@valostudy/db";
-import { PLAN_LIMITS, processingJobSchema } from "@valostudy/schema";
+import { PLAN_LIMITS, processingJobSchema, type ProcessingProgress } from "@valostudy/schema";
 import { Storage, frameKey, sourceKey } from "@valostudy/storage";
 import { log, workerTuning } from "@valostudy/config";
 import { extract } from "./media";
@@ -59,8 +59,16 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
   }
 
   const started = Date.now();
+  const startedAt = new Date(started).toISOString();
   let stage = "download";
   let directory: string | undefined;
+
+  const setProgress = async (progress: Omit<ProcessingProgress, "startedAt">) => {
+    await db().update(jobs).set({
+      progress: { ...progress, startedAt },
+      updatedAt: new Date(),
+    }).where(eq(jobs.studyId, id));
+  };
 
   try {
     await db().transaction(async (tx) => {
@@ -69,6 +77,7 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
         status: "processing",
         attempts: job.attemptsMade + 1,
         error: null,
+        progress: { stage: "download", percent: 5, processedFrames: null, totalFrames: null, startedAt },
         updatedAt: new Date(),
       }).where(eq(jobs.studyId, id));
     });
@@ -112,12 +121,25 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
       { signal: AbortSignal.timeout(2 * 60 * 60 * 1000) },
     );
     if (bytes !== upload.expectedBytes) throw new Error("Truncated source");
+    await setProgress({ stage: "download", percent: 15, processedFrames: null, totalFrames: null });
 
     stage = "ffmpeg";
     const ffmpegStarted = Date.now();
     const result = await extract(source, output, study.options, {
       maxVideoSeconds: limits.maxVideoSeconds,
       maxFrames: limits.maxFrames,
+    }, async (progress) => {
+      const weightedPercent = Math.min(75, 15 + Math.floor(progress.percent * 0.6));
+      const processedFrames = Math.min(
+        progress.expectedFrames,
+        Math.floor((progress.expectedFrames * progress.percent) / 100),
+      );
+      await setProgress({
+        stage: "extract",
+        percent: weightedPercent,
+        processedFrames,
+        totalFrames: progress.expectedFrames,
+      });
     });
     log("frames_extracted", {
       studyId: id,
@@ -136,8 +158,22 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
       objectKey: frameKey(id, frame.name),
     }));
 
+    let uploadedFrames = 0;
+    let nextPersistReport = 1;
+    await setProgress({ stage: "persist", percent: 75, processedFrames: 0, totalFrames: rows.length });
     await forEachConcurrent(rows, frameUploadConcurrency, async (frame) => {
       await storage.putFrame(frame.objectKey, await readFile(join(output, frame.name)));
+      uploadedFrames += 1;
+      const persistPercent = Math.min(98, 75 + Math.floor((uploadedFrames / rows.length) * 23));
+      if (persistPercent >= nextPersistReport || uploadedFrames === rows.length) {
+        nextPersistReport = persistPercent + 1;
+        await setProgress({
+          stage: "persist",
+          percent: persistPercent,
+          processedFrames: uploadedFrames,
+          totalFrames: rows.length,
+        });
+      }
     });
 
     log("frames_persisted", {
@@ -149,6 +185,7 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
       concurrency: frameUploadConcurrency,
     });
 
+    await setProgress({ stage: "finalize", percent: 99, processedFrames: rows.length, totalFrames: rows.length });
     const completedAt = new Date();
     const retentionUntil = limits.retentionDays === null
       ? null
@@ -169,6 +206,13 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
       await tx.update(jobs).set({
         status: "completed",
         error: null,
+        progress: {
+          stage: "completed",
+          percent: 100,
+          processedFrames: rows.length,
+          totalFrames: rows.length,
+          startedAt,
+        },
         updatedAt: completedAt,
       }).where(eq(jobs.studyId, id));
     });
@@ -195,6 +239,9 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
       await tx.update(jobs).set({
         status,
         error: "Video processing failed; see worker logs",
+        progress: status === "failed"
+          ? { stage: "failed", percent: 0, processedFrames: null, totalFrames: null, startedAt }
+          : { stage: "queued", percent: 0, processedFrames: null, totalFrames: null, startedAt: null },
         updatedAt: new Date(),
       }).where(and(
         eq(jobs.studyId, id),
