@@ -29,6 +29,13 @@
       "when": 1790020800000,
       "tag": "0003_paid_features",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790022000000,
+      "tag": "0004_payment_link_intents",
+      "breakpoints": true
     }
   ]
 }
