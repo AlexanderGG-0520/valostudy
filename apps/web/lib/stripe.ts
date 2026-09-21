@@ -1,8 +1,16 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { config } from "@valostudy/config";
-import { billingSubscriptions, db, eq, stripeEvents } from "@valostudy/db";
+import {
+  billingCheckoutIntents,
+  billingSubscriptions,
+  db,
+  eq,
+  stripeEvents,
+} from "@valostudy/db";
 import { planSchema, type Plan } from "@valostudy/schema";
+
+const CHECKOUT_INTENT_TTL_MS = 24 * 60 * 60 * 1000;
 
 function stripeConfig() {
   const c = config();
@@ -29,34 +37,51 @@ async function stripeRequest(path: string, params: URLSearchParams) {
   return body;
 }
 
-export async function createCheckoutSession(input: {
+async function stripeGet(path: string) {
+  const c = stripeConfig();
+  const response = await fetch(`https://api.stripe.com/v1${path}`, {
+    headers: { Authorization: `Bearer ${c.STRIPE_SECRET_KEY}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  const body = await response.json() as Record<string, unknown>;
+  if (!response.ok)
+    throw new Error(typeof body.error === "object" && body.error && "message" in body.error
+      ? String((body.error as { message?: unknown }).message ?? "Stripe request failed")
+      : "Stripe request failed");
+  return body;
+}
+
+function paymentLinkUrl(plan: Exclude<Plan, "free">) {
+  const c = config();
+  return plan === "plus"
+    ? c.STRIPE_PLUS_PAYMENT_LINK_URL
+    : c.STRIPE_PRO_PAYMENT_LINK_URL;
+}
+
+function canonicalPaymentLink(url: string) {
+  const parsed = new URL(url);
+  return `${parsed.origin}${parsed.pathname.replace(/\/$/, "")}`;
+}
+
+export async function createPaymentLinkCheckout(input: {
   userId: string;
   email: string;
   plan: Exclude<Plan, "free">;
-  customerId?: string | null;
 }) {
-  const c = stripeConfig();
-  const priceId = input.plan === "plus" ? c.STRIPE_PLUS_PRICE_ID : c.STRIPE_PRO_PRICE_ID;
-  if (!priceId) throw new Error(`Stripe ${input.plan} price is not configured`);
-  const origin = new URL(c.BETTER_AUTH_URL).origin;
-  const params = new URLSearchParams({
-    mode: "subscription",
-    success_url: `${origin}/?billing=success`,
-    cancel_url: `${origin}/?billing=cancelled`,
-    client_reference_id: input.userId,
-    "line_items[0][price]": priceId,
-    "line_items[0][quantity]": "1",
-    "metadata[userId]": input.userId,
-    "metadata[plan]": input.plan,
-    "subscription_data[metadata][userId]": input.userId,
-    "subscription_data[metadata][plan]": input.plan,
-    allow_promotion_codes: "true",
+  const intentId = randomBytes(24).toString("base64url");
+  const now = new Date();
+  await db().insert(billingCheckoutIntents).values({
+    id: intentId,
+    userId: input.userId,
+    plan: input.plan,
+    createdAt: now,
+    expiresAt: new Date(now.getTime() + CHECKOUT_INTENT_TTL_MS),
   });
-  if (input.customerId) params.set("customer", input.customerId);
-  else params.set("customer_email", input.email);
-  const result = await stripeRequest("/checkout/sessions", params);
-  if (typeof result.url !== "string") throw new Error("Stripe did not return a Checkout URL");
-  return result.url;
+
+  const url = new URL(paymentLinkUrl(input.plan));
+  url.searchParams.set("client_reference_id", intentId);
+  url.searchParams.set("prefilled_email", input.email);
+  return url.toString();
 }
 
 export async function createPortalSession(customerId: string) {
@@ -110,10 +135,18 @@ const subscriptionSchema = z.object({
 });
 
 const checkoutSchema = z.object({
+  id: z.string().optional(),
   customer: z.union([z.string(), z.object({ id: z.string() })]).nullable().optional(),
   subscription: z.union([z.string(), z.object({ id: z.string() })]).nullable().optional(),
+  payment_link: z.union([z.string(), z.object({ id: z.string() })]).nullable().optional(),
   client_reference_id: z.string().nullable().optional(),
   metadata: z.record(z.string(), z.string()).optional().default({}),
+});
+
+const paymentLinkSchema = z.object({
+  id: z.string(),
+  url: z.url(),
+  active: z.boolean(),
 });
 
 function objectId(value: string | { id: string } | null | undefined) {
@@ -130,18 +163,94 @@ function planFromSubscription(subscription: z.infer<typeof subscriptionSchema>):
   return null;
 }
 
+async function resolvePaymentLinkCheckout(session: z.infer<typeof checkoutSchema>) {
+  const intentId = session.client_reference_id;
+  const paymentLinkId = objectId(session.payment_link);
+  if (!intentId || !paymentLinkId) return null;
+
+  const [intent] = await db().select().from(billingCheckoutIntents)
+    .where(eq(billingCheckoutIntents.id, intentId));
+  if (!intent || intent.consumedAt || intent.expiresAt.getTime() < Date.now()) return null;
+
+  const paymentLink = paymentLinkSchema.parse(
+    await stripeGet(`/payment_links/${encodeURIComponent(paymentLinkId)}`),
+  );
+  const expectedUrl = paymentLinkUrl(intent.plan);
+  if (!paymentLink.active || canonicalPaymentLink(paymentLink.url) !== canonicalPaymentLink(expectedUrl))
+    return { invalid: true as const };
+
+  const subscriptionId = objectId(session.subscription);
+  const subscription = subscriptionId
+    ? subscriptionSchema.parse(await stripeGet(`/subscriptions/${encodeURIComponent(subscriptionId)}`))
+    : null;
+
+  return {
+    invalid: false as const,
+    intent,
+    subscription,
+  };
+}
+
 export async function processStripeEvent(payload: unknown) {
   const event = eventSchema.parse(payload);
+
+  let paymentLinkCheckout: Awaited<ReturnType<typeof resolvePaymentLinkCheckout>> = null;
+  let parsedCheckout: z.infer<typeof checkoutSchema> | null = null;
+  if (event.type === "checkout.session.completed") {
+    parsedCheckout = checkoutSchema.parse(event.data.object);
+    if (parsedCheckout.payment_link)
+      paymentLinkCheckout = await resolvePaymentLinkCheckout(parsedCheckout);
+  }
+
   return db().transaction(async (tx) => {
     const inserted = await tx.insert(stripeEvents).values({ id: event.id, type: event.type })
       .onConflictDoNothing().returning({ id: stripeEvents.id });
     if (!inserted.length) return { duplicate: true };
 
     if (event.type === "checkout.session.completed") {
-      const session = checkoutSchema.parse(event.data.object);
+      const session = parsedCheckout ?? checkoutSchema.parse(event.data.object);
+      const customerId = objectId(session.customer);
+
+      if (session.payment_link) {
+        if (!paymentLinkCheckout || paymentLinkCheckout.invalid || !customerId)
+          return { duplicate: false, ignored: true };
+
+        const { intent, subscription } = paymentLinkCheckout;
+        const subscriptionId = subscription?.id ?? objectId(session.subscription);
+        await tx.insert(billingSubscriptions).values({
+          userId: intent.userId,
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscriptionId,
+          plan: intent.plan,
+          status: subscription?.status ?? "incomplete",
+          currentPeriodEnd: subscription?.current_period_end
+            ? new Date(subscription.current_period_end * 1000)
+            : null,
+          cancelAtPeriodEnd: subscription?.cancel_at_period_end ?? false,
+          updatedAt: new Date(),
+        }).onConflictDoUpdate({
+          target: billingSubscriptions.userId,
+          set: {
+            stripeCustomerId: customerId,
+            stripeSubscriptionId: subscriptionId,
+            plan: intent.plan,
+            status: subscription?.status ?? "incomplete",
+            currentPeriodEnd: subscription?.current_period_end
+              ? new Date(subscription.current_period_end * 1000)
+              : null,
+            cancelAtPeriodEnd: subscription?.cancel_at_period_end ?? false,
+            updatedAt: new Date(),
+          },
+        });
+
+        await tx.update(billingCheckoutIntents).set({ consumedAt: new Date() })
+          .where(eq(billingCheckoutIntents.id, intent.id));
+        return { duplicate: false };
+      }
+
+      // Backward compatibility for sessions created by the old Checkout Session integration.
       const userId = session.client_reference_id ?? session.metadata.userId;
       const parsedPlan = planSchema.safeParse(session.metadata.plan);
-      const customerId = objectId(session.customer);
       if (userId && customerId && parsedPlan.success && parsedPlan.data !== "free") {
         const existing = await tx.select().from(billingSubscriptions)
           .where(eq(billingSubscriptions.userId, userId)).limit(1);
