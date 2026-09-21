@@ -11,10 +11,10 @@ Browser ── JSON / session ── Next.js control plane ── PostgreSQL
                                   ▲                      │
                                   │                 Worker dispatcher
                                   │                      ▼
-                                  └── WebP ── Worker ← BullMQ / Valkey
+                                  └── JPEG ── Worker ← BullMQ / Valkey
                                                 │
                                            FFprobe / FFmpeg
-AI → /{id} → /{id}/manifest.json → /{id}/frames/000001.webp
+AI → /{id} → /{id}/manifest.json → /{id}/frames/000001.jpg
 ```
 
 Next.jsは認証、Stripe課金、entitlement、Study作成、uploadの署名と完了通知、閲覧を担当します。動画本体はブラウザからstorageへ直接送信します。FFmpegは独立Workerのみで実行します。完了通知でDBにjobを記録し、Worker内dispatcherが10秒ごとにBullMQへ投入するため、投入前の障害から復旧できます。
@@ -35,7 +35,7 @@ Next.jsは認証、Stripe課金、entitlement、Study作成、uploadの署名と
 
 ## Dependencies / setup
 
-Node.js 22以上、pnpm 10.34.0、PostgreSQL 17、Valkey 8（またはBullMQ対応Redis）、S3-compatible storage、Worker用FFmpeg/FFprobe（libwebp対応）が必要です。
+Node.js 22以上、pnpm 10.34.0、PostgreSQL 17、Valkey 8（またはBullMQ対応Redis）、S3-compatible storage、Worker用FFmpeg/FFprobe（MJPEG encoder対応）が必要です。
 
 ```bash
 corepack enable
@@ -179,7 +179,7 @@ pnpm test:e2e
 
 runnerが専用Compose projectでPostgreSQL 17、Valkey 8、MinIOを起動し、ランダムなcredential・loopback port・bucketを作成します。既存.env・開発DB・開発bucketは使いません。実DBへmigrationを2回適用し、production standalone Webと独立Workerを起動します。FFmpegで16MiB超のAVIを生成し、Chromiumから別originのMinIOへ直接multipart PUTします。
 
-公開／非公開のmanifestとWebP取得、owner認可、不正動画のbounded retry、partサイズ検証、並行completeの冪等性を検証します。DB・queue・storage・HTTP・FFmpegはmockせず、Playwright側でPostgreSQLとBullMQの終端状態も確認します。R2固有の互換性やKubernetes配置は対象外です。
+公開／非公開のmanifestとJPEG取得、owner認可、不正動画のbounded retry、partサイズ検証、並行completeの冪等性を検証します。DB・queue・storage・HTTP・FFmpegはmockせず、Playwright側でPostgreSQLとBullMQの終端状態も確認します。R2固有の互換性やKubernetes配置は対象外です。
 
 成功・失敗時ともテスト用process/container/tmpfsデータと動画fixtureを削除します。ログと失敗時スクリーンショットは `.e2e-artifacts/<run-id>/` に残します。署名URLやcookieを含むtrace/HARは記録しません。CIの独立 `e2e` jobも同じcommandを実行し、診断artifactを3日間保存します。強制終了・ホスト停止で残った場合は、ログのrun-idと `docker compose ls` で対象を確認し、その `valostudy-e2e-<run-id>` projectのみ削除してください。
 
@@ -189,9 +189,9 @@ Study IDは `crypto.randomBytes(6)` から作る11文字lowercase hex（44bit）
 
 - Study: `https://valostudy.example.com/3fa91bc72de`
 - Manifest: `/3fa91bc72de/manifest.json`
-- Frame: `/3fa91bc72de/frames/000001.webp`
+- Frame: `/3fa91bc72de/frames/000001.jpg`
 
-manifestはschemaVersion、studyId、player、frames、coachingProtocol、promptを含むZod schemaで管理します。内部object keyを含めません。frame routeがowner/public認可後にWebPだけを配信します。元動画をWeb経由で配信するrouteはありません。private取得にはowner cookieが必要です。
+manifestはschemaVersion、studyId、player、frames、coachingProtocol、promptを含むZod schemaで管理します。内部object keyを含めません。frame routeがowner/public認可後にJPEGを配信します。既存StudyのWebPも後方互換で配信します。元動画をWeb経由で配信するrouteはありません。private取得にはowner cookieが必要です。
 
 ## Storage / queue / processing
 
@@ -200,7 +200,7 @@ manifestはschemaVersion、studyId、player、frames、coachingProtocol、prompt
 3. Browserから16MiB単位で直接PUT。最後のpartのみ小さくなります。署名は想定Content-Lengthを含み、各part最大3回試行します。
 4. `POST /api/uploads/{id}/complete` がListPartsの枚数・番号・サイズと完成objectのHEADサイズを検査。row lockで直列化し、再送は冪等。
 5. 同一DB transactionで永続jobを作成。dispatcherがstable job IDでBullMQへ投入。最大3回の試行とexponential backoff。
-6. Workerがstream download、FFprobe検証、録画全体のFFmpeg抽出、WebP保存、動画/frame metadataとDB状態更新を実行。
+6. Workerがstream download、FFprobe検証、録画全体のFFmpeg抽出、JPEG 4:4:4保存、動画/frame metadataとDB状態更新を実行。
 7. フレームの永続化とDB更新が完了した直後に元動画objectを削除。処理が最終失敗した場合も元動画を削除。
 8. Workerが期限切れ未完了sessionをabort・削除し、BullMQのstalled/failed状態をDBへ同期。
 

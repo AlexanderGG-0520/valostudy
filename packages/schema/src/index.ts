@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const studyIdSchema = z.string().regex(/^[0-9a-f]{11}$/);
-export const frameNameSchema = z.string().regex(/^[0-9]{6}\.webp$/);
+export const frameNameSchema = z.string().regex(/^[0-9]{6}\.(?:jpg|webp)$/);
 export const processingStatusSchema = z.enum(["pending", "queued", "processing", "completed", "failed"]);
 export const processingStageSchema = z.enum(["queued", "download", "extract", "persist", "finalize", "completed", "failed"]);
 export const processingProgressSchema = z.object({
@@ -151,7 +151,7 @@ export const manifestSchema = z.object({
   framesExpiredAt: z.iso.datetime().nullable().default(null),
   frames: z.array(z.object({
     timestampMs: z.number().int().nonnegative(),
-    url: z.string().regex(/^\/[0-9a-f]{11}\/frames\/[0-9]{6}\.webp$/),
+    url: z.string().regex(/^\/[0-9a-f]{11}\/frames\/[0-9]{6}\.(?:jpg|webp)$/),
   })).max(MAX_EXTRACTED_FRAMES),
   timestampNote: z.literal("Sampling timeline; timestamps are approximate, not original frame PTS."),
   coachingProtocol: z.object({
