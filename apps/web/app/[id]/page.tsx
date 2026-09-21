@@ -5,6 +5,7 @@ import { buildManifest } from "../../lib/studies";
 import { HttpError } from "../../lib/http";
 import { StudyProcessingRefresh } from "../../components/study-processing-refresh";
 import { ProcessingTiming } from "../../components/processing-timing";
+import { FrameGallery } from "../../components/frame-gallery";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,6 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     if (e instanceof HttpError && e.status === 404) notFound();
     throw e;
   });
-  const previewFrames = m.frames.slice(0, 120);
   const processing = m.status === "pending" || m.status === "queued" || m.status === "processing";
   const missingCompletedFrames = m.status === "completed" && !m.framesExpiredAt && m.frames.length === 0;
   const progress = m.processingProgress;
@@ -64,7 +64,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
       <p>
         {processing
           ? "録画を解析してコーチング用フレームを生成しています。進捗は自動更新されます。"
-          : "AI向けの完全なフレーム一覧は manifest.json にあります。このページでは確認用に最大120枚だけプレビューします。"}
+          : "AI向けの完全なフレーム一覧は manifest.json にあります。このページでも全フレームを段階的に読み込んで確認できます。"}
       </p>
     </header>
 
@@ -125,7 +125,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     {m.framesExpiredAt && <section className="study-card retention-expired">
       <h2>フレーム保持期間が終了しました</h2>
       <p>
-        保存期限に達したためWebPフレームは削除されています。Study metadataとコーチングプロンプトは残っています。
+        保存期限に達したため画像フレームは削除されています。Study metadataとコーチングプロンプトは残っています。
       </p>
     </section>}
 
@@ -151,21 +151,12 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
       <div className="frame-heading">
         <div>
           <p className="eyebrow">FRAME EVIDENCE</p>
-          <h2>フレームプレビュー</h2>
+          <h2>フレーム</h2>
         </div>
-        <p>{previewFrames.length} / {m.frames.length} frames · {m.timestampNote}</p>
+        <p>{m.frames.length.toLocaleString()} frames · {m.timestampNote}</p>
       </div>
 
-      <div className="frame-grid">
-        {previewFrames.map((frame) => <figure className="frame-card" key={frame.url}>
-          <a href={frame.url}>
-            <picture>
-              <img src={frame.url} alt={"Frame at " + frame.timestampMs + " ms"} loading="lazy" />
-            </picture>
-          </a>
-          <figcaption>{(frame.timestampMs / 1000).toFixed(1)} s</figcaption>
-        </figure>)}
-      </div>
+      <FrameGallery frames={m.frames} />
     </>}
   </main>;
 }
