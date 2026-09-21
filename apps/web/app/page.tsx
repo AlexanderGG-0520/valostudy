@@ -1,4 +1,5 @@
 import { UploadForm } from "../components/upload-form";
+import { BillingPanel } from "../components/billing-panel";
 
 export default function Home() {
   return <main className="site-shell">
@@ -28,6 +29,7 @@ export default function Home() {
       </div>
     </header>
 
+    <BillingPanel />
     <UploadForm />
   </main>;
 }
