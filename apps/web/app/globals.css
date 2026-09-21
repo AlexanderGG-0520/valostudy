@@ -1488,6 +1488,38 @@ input[type="file"]::file-selector-button {
 }
 
 
+.frame-gallery-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(112, 99, 79, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 250, 241, 0.58);
+  color: var(--muted-ink);
+  font-size: 0.78rem;
+}
+
+.frame-gallery-footer strong {
+  color: var(--olive-dark);
+}
+
+.frame-load-more {
+  min-width: 180px;
+}
+
+@media (max-width: 620px) {
+  .frame-gallery-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .frame-load-more {
+    width: 100%;
+  }
+}
 .brand-actions,
 .session-actions,
 .account-actions {
