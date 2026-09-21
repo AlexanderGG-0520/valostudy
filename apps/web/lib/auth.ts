@@ -1,9 +1,12 @@
 import { betterAuth } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { passkey as passkeyPlugin } from "@better-auth/passkey";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db, user, session, account, verification, passkey } from "@valostudy/db";
 import { config } from "@valostudy/config";
 import { assertEmailConfiguration, sendVerificationEmailDetached } from "./email";
+
+const LEGAL_VERSION = "2026-09-22";
 
 let instance: ReturnType<typeof createAuth> | undefined;
 
@@ -18,6 +21,40 @@ function createAuth() {
     }),
     baseURL: c.BETTER_AUTH_URL,
     secret: c.BETTER_AUTH_SECRET,
+    user: {
+      additionalFields: {
+        termsAccepted: { type: "boolean", required: true },
+        privacyAccepted: { type: "boolean", required: true },
+        legalAcceptedAt: { type: "date", required: false, input: false, returned: false },
+        legalVersion: { type: "string", required: false, input: false },
+      },
+    },
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== "/sign-up/email") return;
+        if (ctx.body?.termsAccepted !== true || ctx.body?.privacyAccepted !== true) {
+          throw new APIError("BAD_REQUEST", {
+            message: "利用規約とプライバシーポリシーへの同意が必要です",
+          });
+        }
+      }),
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (newUser, ctx) => {
+            if (ctx?.path !== "/sign-up/email") return;
+            return {
+              data: {
+                ...newUser,
+                legalAcceptedAt: new Date(),
+                legalVersion: LEGAL_VERSION,
+              },
+            };
+          },
+        },
+      },
+    },
     emailVerification: {
       sendVerificationEmail: async ({ user, url }) => {
         sendVerificationEmailDetached(user.email, url);
