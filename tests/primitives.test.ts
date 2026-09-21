@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateStudyId, insertWithStudyId } from "@valostudy/db/id";
-import { studyIdSchema, manifestSchema, playerSettingsSchema, studyCreationSchema, processingJobSchema, PART_BYTES, MAX_UPLOAD_BYTES, MAX_UPLOAD_PARTS } from "@valostudy/schema";
+import { studyIdSchema, manifestSchema, playerSettingsSchema, studyCreationSchema, processingJobSchema, PART_BYTES, MAX_UPLOAD_BYTES, MAX_UPLOAD_PARTS, PLAN_LIMITS } from "@valostudy/schema";
 import { sourceKey, frameKey, partSize } from "@valostudy/storage";
 import { template, renderSnapshot } from "@valostudy/prompts";
 import { id, input, manifest } from "./fixtures";
@@ -38,7 +38,11 @@ describe("shared validation", () => {
       expect(playerSettingsSchema.safeParse({ ...input.player, sensitivity: { dpi, inGame: 0.1 } }).success).toBe(false);
     expect(playerSettingsSchema.safeParse({ ...input.player, videoSettings: { resolution: "1920x1080" } }).success).toBe(false);
     expect(studyCreationSchema.safeParse({ ...input, video: { size: MAX_UPLOAD_BYTES + 1, mimeType: "video/mp4" } }).success).toBe(false);
-    expect(studyCreationSchema.safeParse({ ...input, processing: { fps: 5 } }).success).toBe(false);
+    expect(studyCreationSchema.safeParse({ ...input, processing: { fps: 5 } }).success).toBe(true);
+    expect(studyCreationSchema.safeParse({ ...input, processing: { fps: 3 } }).success).toBe(false);
+    expect(PLAN_LIMITS.free.cooldownHours).toBe(6);
+    expect(PLAN_LIMITS.plus.rollingStudyLimit).toBe(30);
+    expect(PLAN_LIMITS.pro.publicStudyLimitLabel).toContain("Unlimited");
     expect(processingJobSchema.safeParse({ studyId: id, sourceObjectKey: sourceKey("00000000000"), options: input.processing }).success).toBe(false);
   });
 });
