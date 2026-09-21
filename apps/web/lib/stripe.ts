@@ -121,12 +121,12 @@ function objectId(value: string | { id: string } | null | undefined) {
 }
 
 function planFromSubscription(subscription: z.infer<typeof subscriptionSchema>): Exclude<Plan, "free"> | null {
-  const metadataPlan = planSchema.safeParse(subscription.metadata.plan);
-  if (metadataPlan.success && metadataPlan.data !== "free") return metadataPlan.data;
   const price = subscription.items?.data[0]?.price.id;
   const c = config();
   if (price && price === c.STRIPE_PLUS_PRICE_ID) return "plus";
   if (price && price === c.STRIPE_PRO_PRICE_ID) return "pro";
+  const metadataPlan = planSchema.safeParse(subscription.metadata.plan);
+  if (metadataPlan.success && metadataPlan.data !== "free") return metadataPlan.data;
   return null;
 }
 
@@ -168,12 +168,13 @@ export async function processStripeEvent(payload: unknown) {
     if (event.type.startsWith("customer.subscription.")) {
       const subscription = subscriptionSchema.parse(event.data.object);
       const customerId = objectId(subscription.customer);
-      const plan = planFromSubscription(subscription);
+      let plan = planFromSubscription(subscription);
       let userId = subscription.metadata.userId;
-      if (!userId && customerId) {
+      if (customerId) {
         const [existing] = await tx.select().from(billingSubscriptions)
           .where(eq(billingSubscriptions.stripeCustomerId, customerId));
-        userId = existing?.userId;
+        if (!userId) userId = existing?.userId;
+        if (!plan && existing?.plan !== "free") plan = existing?.plan ?? null;
       }
       if (userId && customerId && plan) {
         await tx.insert(billingSubscriptions).values({
