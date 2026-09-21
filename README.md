@@ -90,17 +90,32 @@ MinIOのバージョンがbucket CORS APIをサポートしない場合は `MINI
 
 ## Plans / Stripe billing
 
-| Plan | Study limit | Video / upload | Sampling | Frame retention | Queue |
-|---|---|---|---|---|---|
-| Free | 1 Studyごとに6時間cooldown | 2h / 16GiB | 最大1 FPS / 7,200 frames | 30日 | Standard |
-| Plus ($20/月) | 30 Studies / rolling 7 days | 2h / 32GiB | 最大2 FPS / 14,400 frames | 1年 | Priority |
-| Pro ($200/月) | UI上Unlimited（fair-use保護あり） | 4h / 64GiB | 最大5 FPS / 72,000 frames | 期限なし | Highest |
+| Plan | Study limit | Video / upload | Sampling | Frame retention | Paid features | Queue |
+|---|---|---|---|---|---|---|
+| Free | 1 Studyごとに6時間cooldown | 2h / 16GiB | 最大1 FPS / 7,200 frames | 30日 | 基本Study / Public・Private | Standard |
+| Plus ($20/月) | 30 Studies / rolling 7 days | 2h / 32GiB | 最大2 FPS / 14,400 frames | 1年 | 最大20 Studyの横断比較 | Priority |
+| Pro ($200/月) | UI上Unlimited（fair-use保護あり） | 4h / 64GiB | 最大5 FPS / 72,000 frames | 期限なし | 最大100 Study比較 + Bearer API | Highest |
 
 FreeのcooldownとPlus/Proのrolling quotaは、Study作成ボタンではなくmultipart uploadが正常完了してprocessingへ投入される時点で消費します。アップロード途中の失敗では消費しません。Workerが最終的に動画を処理できなかった場合はusage eventをreleaseするため、利用枠が戻ります。同一ユーザーのcompleteはPostgreSQL row lockで直列化し、並行requestによるquota超過を防ぎます。
 
 Stripe Checkoutは `POST /api/billing/checkout`、Customer Portalは `POST /api/billing/portal`、状態表示は `GET /api/billing/status`。Webhookは `POST /api/billing/webhook` でraw bodyと `Stripe-Signature` をHMAC検証し、event IDをDBへ保存して冪等処理します。`customer.subscription.created/updated/deleted` をentitlement source of truthとし、解約予約はperiod endまで有効、`past_due` はperiod endから3日graceを持ちます。
 
 Stripe DashboardではPlus/Proのrecurring Priceを作成して上記Price IDを設定し、Webhook endpointへ `checkout.session.completed` と `customer.subscription.*` を送信してください。Customer Portalでsubscription cancellationとPlus/Pro間のplan changeを許可してください。既にpaid subscriptionがあるユーザーのplan変更は二重subscription防止のためCheckoutではなくPortalへ送ります。
+
+### Paid analysis features
+
+Plus / Proではログイン中のStudy Libraryからcompleted Studyを複数選択してcomparisonを作成できます。Plusは最大20件、Proは最大100件です。comparisonは `/compare/{id}` と `/compare/{id}/manifest.json` を持ち、AIへ複数試合を1つの長期 evidence setとして渡せます。public comparisonはpublic Studyだけから作成でき、private comparisonはowner sessionが必要です。
+
+Proでは最大5個のBearer API keyを発行できます。secretは発行時に一度だけ表示し、DBにはSHA-256 hashと表示用prefixだけを保存します。revoked keyやPro subscriptionが失効したkeyは認証に使えません。
+
+```bash
+curl -H "Authorization: Bearer vsk_..." \
+  https://valostudy.example.com/api/v1/studies
+
+curl -H "Authorization: Bearer vsk_..." \
+  https://valostudy.example.com/api/v1/studies/3fa91bc72de/manifest
+```
+
 
 ## Commands / tests
 
@@ -184,11 +199,11 @@ JSON logsにstudyId、jobId、stage、duration、frameCount、retryCount、error
 
 - Better Authのemail/password登録・ログインとowner認可を実装。email verification、password reset、OAuth、MFA、分散rate limitは未実装。
 - Free/Plus/Pro quota、Stripe subscription、frame retentionは実装済み。WAFとbucket lifecycleの自動設定は未実装。
-- 公開範囲変更、削除UI、失効・期限付き共有、frame選択、再処理UI、Study一覧は未実装。
+- Study LibraryとPlus/Pro comparisonは実装済み。公開範囲変更、削除UI、失効・期限付き共有、frame選択、再処理UIは未実装。
 - ページ再読込後のupload再開、complete通知のUI再試行は未実装。中断multipartは4時間後に回収。
 - 作成途中のクラッシュで残るpending Study、DB未記録multipartの完全回収は未実装。frame保持期限はWorkerが処理します。元動画は正常完了または最終失敗時にWorkerが削除し、bucket lifecycleは異常終了時の補完として必要です。
 - FFmpeg専用sandbox/network policy、DB/queue readiness、アラート、queue retentionは追加対象。health endpointは生存確認のみ。
-- 高度なCV、OCR、音声解析、自動コーチングAI、Pro向けadaptive sampling/workspace/APIは未実装。
+- Proのread-only Bearer APIと長期Study比較は実装済み。高度なCV、OCR、音声解析、自動コーチングAI、adaptive sampling、coach workspace/team invite、batch uploadは未実装。
 - 旧FastAPI/SQLiteからのデータmigrationはありません。旧実装はGit commit `d8c6a13` に残っています。
 
 ## References / license
