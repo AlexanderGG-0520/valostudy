@@ -101,8 +101,9 @@ aws --endpoint-url "$S3_ENDPOINT" s3api get-bucket-cors \
 | S3_ACCESS_KEY / S3_SECRET_KEY | S3互換credential。R2ではManage R2 API tokensが表示するAccess Key ID / Secret Access Keyを使用（一般API token値は不可） |
 | STRIPE_SECRET_KEY | Stripe server secret key |
 | STRIPE_WEBHOOK_SECRET | `/api/billing/webhook` の署名検証secret |
-| STRIPE_PLUS_PRICE_ID | $20/月 Plus recurring Price ID |
-| STRIPE_PRO_PRICE_ID | $200/月 Pro recurring Price ID |
+| STRIPE_PLUS_PAYMENT_LINK_URL | Plus用Payment Link。既定値は `https://buy.stripe.com/5kQbJ0gR2fp9alR1ow9IQ04` |
+| STRIPE_PRO_PAYMENT_LINK_URL | Pro用Payment Link。既定値は `https://buy.stripe.com/cNi6oG58k1yj3Xtd7e9IQ05` |
+| STRIPE_PLUS_PRICE_ID / STRIPE_PRO_PRICE_ID | 旧Checkout Sessionやsubscription metadataからのplan判定用。Payment Link新規購入では必須ではない |
 
 R2 endpointでは設定をfail-fast検証し、region=auto、32文字のAccess Key ID、64文字のSecret Access Key以外は外部リクエスト前に拒否します。
 
@@ -119,9 +120,9 @@ R2 endpointでは設定をfail-fast検証し、region=auto、32文字のAccess K
 
 FreeのcooldownとPlus/Proのrolling quotaは、Study作成ボタンではなくmultipart uploadが正常完了してprocessingへ投入される時点で消費します。アップロード途中の失敗では消費しません。Workerが最終的に動画を処理できなかった場合はusage eventをreleaseするため、利用枠が戻ります。同一ユーザーのcompleteはPostgreSQL row lockで直列化し、並行requestによるquota超過を防ぎます。
 
-Stripe Checkoutは `POST /api/billing/checkout`、Customer Portalは `POST /api/billing/portal`、状態表示は `GET /api/billing/status`。Webhookは `POST /api/billing/webhook` でraw bodyと `Stripe-Signature` をHMAC検証し、event IDをDBへ保存して冪等処理します。`customer.subscription.created/updated/deleted` をentitlement source of truthとし、解約予約はperiod endまで有効、`past_due` はperiod endから3日graceを持ちます。
+`POST /api/billing/checkout` は新しいCheckout Sessionを自前生成せず、既存のStripe Payment Linkへ認証済みユーザーを送ります。serverは24時間有効のopaque checkout intentをDBへ作り、そのIDをPayment Linkの `client_reference_id` として渡し、emailもprefillします。Customer Portalは `POST /api/billing/portal`、状態表示は `GET /api/billing/status`。Webhookは `POST /api/billing/webhook` でraw bodyと `Stripe-Signature` をHMAC検証し、event IDをDBへ保存して冪等処理します。
 
-Stripe DashboardではPlus/Proのrecurring Priceを作成して上記Price IDを設定し、Webhook endpointへ `checkout.session.completed` と `customer.subscription.*` を送信してください。Customer Portalでsubscription cancellationとPlus/Pro間のplan changeを許可してください。既にpaid subscriptionがあるユーザーのplan変更は二重subscription防止のためCheckoutではなくPortalへ送ります。
+新規購入は既存Payment Linkを使用します。Webhookの `checkout.session.completed` ではCheckout Sessionの `payment_link` をStripe APIから再取得し、checkout intentが要求したPlus/Proの設定済みURLと一致することをserver-sideで検証してからentitlementを紐付けます。これによりclient側でPlus/Proのリンクを差し替えて安いプランの支払いで上位権限を得ることを防ぎます。subscription eventがCheckout完了より先に到着しても、Checkout完了時にStripeからsubscription状態を再取得するためevent順序に依存しません。Customer Portalでsubscription cancellationとPlus/Pro間のplan changeを許可してください。既にpaid subscriptionがあるユーザーのplan変更は二重subscription防止のためPayment LinkではなくPortalへ送ります。
 
 開発者アカウントにはserver-sideのbuilt-in Pro entitlementを適用できます。対象emailは正規化後のSHA-256で照合するため、plaintextの開発者emailはrepositoryへ保存しません。Developer entitlementはStripe Checkoutを要求せず、通常のPro制限・Coach Workspace・Bearer API権限をそのまま使用します。
 
