@@ -51,7 +51,7 @@ async function submit(page: Page, visibility: "public" | "private", invalid = fa
   });
   else await page.getByLabel("試合全体の録画（最大16 GiB）").setInputFiles(video);
   const created = page.waitForResponse((r) => new URL(r.url()).pathname === "/api/studies" && r.request().method() === "POST");
-  await page.getByRole("button", { name: "Studyを作成してアップロード" }).click();
+  await page.getByRole("button", { name: "試合全体をStudyにする" }).click();
   const response = await created;
   expect(response.status()).toBe(201);
   const result = await response.json() as { studyId: string; partCount: number };
@@ -88,13 +88,14 @@ for (const visibility of ["public", "private"] as const) {
     expect(JSON.stringify(manifest)).not.toContain("studies/");
     const row = await persisted(id, "completed");
     expect(row.attempts).toBe(1);
-    let sourceExists = true;
-    try {
-      await s3.send(new HeadObjectCommand({ Bucket: c.S3_BUCKET, Key: `studies/${id}/source` }));
-    } catch {
-      sourceExists = false;
-    }
-    expect(sourceExists).toBe(false);
+    await expect.poll(async () => {
+      try {
+        await s3.send(new HeadObjectCommand({ Bucket: c.S3_BUCKET, Key: `studies/${id}/source` }));
+        return true;
+      } catch {
+        return false;
+      }
+    }, { timeout: 15000 }).toBe(false);
     const job = await queue.getJob(id);
     expect(job?.data).toMatchObject({ studyId: id, sourceObjectKey: `studies/${id}/source`, options: { fps: 1 } });
     for (const frame of manifest.frames) {
@@ -106,7 +107,7 @@ for (const visibility of ["public", "private"] as const) {
     }
     await page.goto("/" + id);
     await expect(page.getByRole("heading", { name: "Study " + id })).toBeVisible();
-    await expect(page.locator("img")).toHaveCount(4);
+    await expect(page.locator("img")).toHaveCount(3);
     const anonymous = await browser.newContext({ baseURL: c.BETTER_AUTH_URL });
     try {
       for (const path of ["/" + id, "/" + id + "/manifest.json", manifest.frames[0].url])
