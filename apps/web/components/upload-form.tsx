@@ -112,10 +112,19 @@ export function UploadForm() {
         password: String(data.get("password")),
         name: String(data.get("name")),
       };
-      const result = data.get("mode") === "signup"
-        ? await authClient.signUp.email(input)
+      const signingUp = data.get("mode") === "signup";
+      const result = signingUp
+        ? await authClient.signUp.email({ ...input, callbackURL: "/account" })
         : await authClient.signIn.email(input);
-      if (result.error) throw new Error(result.error.message);
+      if (result.error) {
+        if (!signingUp && result.error.status === 403) {
+          throw new Error("メール認証が必要です。確認メールを再送しました。");
+        }
+        throw new Error(result.error.message);
+      }
+      if (signingUp) {
+        setMessage("確認メールを送信しました。メール内のリンクを開いて登録を完了してください。");
+      }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "ログイン失敗");
     } finally {
@@ -273,6 +282,16 @@ export function UploadForm() {
           <Button className="primary-button" disabled={busy || isPending}>続ける</Button>
         </div>
       </form>
+      <div className="auth-divider"><span>または</span></div>
+      <Button
+        className="secondary-button passkey-login-button"
+        variant="outline"
+        disabled={busy || isPending}
+        onClick={() => void signInWithPasskey()}
+      >
+        パスキーでログイン
+      </Button>
+      <p className="field-hint">新規登録ではメールアドレス確認後にログインできます。</p>
       <p className="status-line" role="status">{message}</p>
     </section>;
   }
