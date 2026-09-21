@@ -210,22 +210,22 @@ export function UploadForm() {
       <form className="auth-grid" onSubmit={authenticate}>
         <label>
           <span className="field-label">操作</span>
-          <select name="mode">
+          <select name="mode" aria-label="操作">
             <option value="signin">ログイン</option>
             <option value="signup">新規登録</option>
           </select>
         </label>
         <label>
           <span className="field-label">表示名</span>
-          <input name="name" defaultValue="Player" required maxLength={100} autoComplete="name" />
+          <input name="name" aria-label="表示名" defaultValue="Player" required maxLength={100} autoComplete="name" />
         </label>
         <label>
           <span className="field-label">メール</span>
-          <input name="email" type="email" required autoComplete="email" />
+          <input name="email" aria-label="メール" type="email" required autoComplete="email" />
         </label>
         <label>
           <span className="field-label">パスワード（12文字以上）</span>
-          <input name="password" type="password" required minLength={12} autoComplete="current-password" />
+          <input name="password" aria-label="パスワード（12文字以上）" type="password" required minLength={12} autoComplete="current-password" />
         </label>
         <div className="form-actions">
           <Button className="primary-button" disabled={busy || isPending}>続ける</Button>
@@ -311,6 +311,7 @@ export function UploadForm() {
           <span className="field-label">画質・Reflexなど</span>
           <input
             name="graphics"
+            aria-label="画質・Reflexなど"
             placeholder="例: 全低 / Reflex ON+Boost / G-SYNC ON"
             required
             maxLength={1000}
@@ -340,6 +341,7 @@ export function UploadForm() {
           <span className="field-label">試合全体の録画（最大16 GiB）</span>
           <input
             name="video"
+            aria-label="試合全体の録画（最大16 GiB）"
             type="file"
             accept=".mp4,.mkv,.mov,.webm,.avi"
             required
@@ -363,7 +365,7 @@ export function UploadForm() {
         <div className="field-grid two-columns">
           <label>
             <span className="field-label">フレーム抽出間隔</span>
-            <select name="fps" defaultValue="0.5">
+            <select name="fps" aria-label="フレーム抽出間隔" defaultValue="0.5">
               <option value="0.25">4秒ごと · 軽量</option>
               <option value="0.5">2秒ごと · 推奨</option>
               <option value="1">1秒ごと · 高密度</option>
@@ -372,7 +374,7 @@ export function UploadForm() {
           </label>
           <label>
             <span className="field-label">公開範囲</span>
-            <select name="visibility">
+            <select name="visibility" aria-label="公開範囲">
               <option value="private">非公開 · 自分のみ</option>
               <option value="public">公開 · AIがログインなしで取得可能</option>
             </select>
