@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 const schema = z.object({
   DATABASE_URL: z.url(),
   REDIS_URL: z.url(),
@@ -9,12 +10,58 @@ const schema = z.object({
   S3_BUCKET: z.string().min(1),
   S3_ACCESS_KEY: z.string().min(1),
   S3_SECRET_KEY: z.string().min(1),
+}).superRefine((value, ctx) => {
+  const hostname = new URL(value.S3_ENDPOINT).hostname.toLowerCase();
+  if (!hostname.endsWith(".r2.cloudflarestorage.com")) return;
+
+  if (value.S3_REGION !== "auto") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["S3_REGION"],
+      message: "Cloudflare R2 requires S3_REGION=auto",
+    });
+  }
+  if (value.S3_ACCESS_KEY.length !== 32) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["S3_ACCESS_KEY"],
+      message: "Cloudflare R2 requires the 32-character S3 Access Key ID from Manage R2 API tokens, not the API token value",
+    });
+  }
+  if (value.S3_SECRET_KEY.length !== 64) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["S3_SECRET_KEY"],
+      message: "Cloudflare R2 requires the 64-character S3 Secret Access Key from Manage R2 API tokens",
+    });
+  }
 });
-export function config() { return schema.parse(process.env); }
+
+export class ConfigurationError extends Error {
+  constructor(public readonly issues: string[]) {
+    super(`Invalid server configuration: ${issues.join("; ")}`);
+    this.name = "ConfigurationError";
+  }
+}
+
+export function config() {
+  const parsed = schema.safeParse(process.env);
+  if (!parsed.success) {
+    throw new ConfigurationError(parsed.error.issues.map((issue) => {
+      const path = issue.path.length ? issue.path.join(".") : "environment";
+      return `${path}: ${issue.message}`;
+    }));
+  }
+  return parsed.data;
+}
+
 export const QUEUE_NAME = "video-processing";
+
 export function redisConnection() {
   const url = new URL(config().REDIS_URL);
-  return { host: url.hostname, port: Number(url.port || 6379),
+  return {
+    host: url.hostname,
+    port: Number(url.port || 6379),
     username: url.username ? decodeURIComponent(url.username) : undefined,
     password: url.password ? decodeURIComponent(url.password) : undefined,
     db: Number(url.pathname.slice(1) || 0),
@@ -22,6 +69,7 @@ export function redisConnection() {
     maxRetriesPerRequest: null,
   };
 }
+
 export function log(event: string, context: Record<string, unknown> = {}) {
   console.log(JSON.stringify({ time: new Date().toISOString(), event, ...context }));
 }
