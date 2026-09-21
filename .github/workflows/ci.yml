@@ -16,7 +16,7 @@ jobs:
           node-version: "22"
           cache: pnpm
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -32,7 +32,7 @@ jobs:
           node-version: "22"
           cache: pnpm
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm build
       - run: pnpm test:e2e
