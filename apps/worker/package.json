@@ -1,0 +1,22 @@
+{
+  "name": "@valostudy/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/index.js",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "bullmq": "^5.70.0",
+    "@valostudy/config": "workspace:*",
+    "@valostudy/db": "workspace:*",
+    "@valostudy/schema": "workspace:*",
+    "@valostudy/storage": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "esbuild": "^0.28.2"
+  }
+}

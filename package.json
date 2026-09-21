@@ -1,0 +1,47 @@
+{
+  "name": "valostudy",
+  "private": true,
+  "packageManager": "pnpm@10.34.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @valostudy/web dev",
+    "dev:worker": "pnpm --filter @valostudy/worker dev",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit && pnpm --filter @valostudy/web typecheck",
+    "test": "vitest run",
+    "build": "pnpm --filter @valostudy/web build && pnpm --filter @valostudy/worker build",
+    "db:generate": "pnpm --filter @valostudy/db generate",
+    "db:migrate": "pnpm --filter @valostudy/db migrate"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^22.19.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "drizzle-orm": "^0.45.3",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.0",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^4.1.11"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild": "^0.28.2"
+    }
+  },
+  "dependencies": {
+    "@valostudy/config": "workspace:*",
+    "@valostudy/db": "workspace:*",
+    "@valostudy/prompts": "workspace:*",
+    "@valostudy/schema": "workspace:*",
+    "@valostudy/storage": "workspace:*"
+  }
+}

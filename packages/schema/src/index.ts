@@ -1,0 +1,70 @@
+import { z } from "zod";
+export const studyIdSchema = z.string().regex(/^[0-9a-f]{11}$/);
+export const frameNameSchema = z.string().regex(/^[0-9]{6}\.webp$/);
+export const processingStatusSchema = z.enum(["pending", "queued", "processing", "completed", "failed"]);
+export const playerSettingsSchema = z.object({
+  rank: z.string().regex(/^(Unranked|Radiant|(Iron|Bronze|Silver|Gold|Platinum|Diamond|Ascendant|Immortal) [1-3])$/),
+  sensitivity: z.object({ dpi: z.number().int().min(50).max(64000), inGame: z.number().positive().max(20) }),
+  videoSettings: z.object({
+    resolution: z.string().regex(/^[1-9][0-9]{2,3}x[1-9][0-9]{2,3}$/),
+    refreshHz: z.number().int().min(30).max(1000),
+    fpsLimit: z.number().int().min(0).max(2000),
+    vsync: z.boolean(),
+    displayMode: z.enum(["fullscreen", "borderless", "windowed"]),
+    graphics: z.string().trim().min(1).max(1000),
+  }),
+  context: z.string().max(6000).default(""),
+});
+export const processingOptionsSchema = z.object({
+  startSeconds: z.number().min(0).max(28800).default(0),
+  durationSeconds: z.number().min(1).max(120).default(20),
+  fps: z.union([z.literal(0.5), z.literal(1), z.literal(2), z.literal(5)]).default(2),
+}).refine((v) => v.durationSeconds * v.fps <= 300, "Maximum 300 frames");
+export const MAX_UPLOAD_BYTES = 4 * 1024 ** 3;
+export const PART_BYTES = 16 * 1024 ** 2;
+export const studyCreationSchema = z.object({
+  player: playerSettingsSchema,
+  visibility: z.enum(["private", "public"]).default("private"),
+  video: z.object({
+    size: z.number().int().positive().max(MAX_UPLOAD_BYTES),
+    mimeType: z.enum(["video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/x-msvideo"]),
+  }),
+  processing: processingOptionsSchema,
+});
+export const promptTemplateSchema = z.object({
+  id: z.string().min(1), version: z.string().min(1),
+  systemPrompt: z.string().min(1), researchPrompt: z.string().min(1),
+  coachingPrompt: z.string().min(1), createdAt: z.iso.datetime(),
+});
+export const promptSnapshotSchema = z.object({
+  templateId: z.string().min(1), templateVersion: z.string().min(1),
+  prompt: z.string().min(1), createdAt: z.iso.datetime(),
+});
+export const manifestSchema = z.object({
+  schemaVersion: z.literal(1),
+  studyId: studyIdSchema,
+  player: playerSettingsSchema,
+  status: processingStatusSchema,
+  frames: z.array(z.object({
+    timestampMs: z.number().int().nonnegative(),
+    url: z.string().regex(/^\/[0-9a-f]{11}\/frames\/[0-9]{6}\.webp$/),
+  })).max(300),
+  timestampNote: z.literal("Sampling timeline; timestamps are approximate, not original frame PTS."),
+  coachingProtocol: z.object({
+    redditResearchRequired: z.literal(true), promptTemplateVersion: z.string().min(1),
+  }),
+  prompt: z.string().min(1),
+}).superRefine((v, ctx) => {
+  if (v.frames.some((f) => !f.url.startsWith(`/${v.studyId}/frames/`)))
+    ctx.addIssue({ code: "custom", message: "Frame must belong to this Study", path: ["frames"] });
+});
+export const processingJobSchema = z.object({
+  studyId: studyIdSchema,
+  sourceObjectKey: z.string().regex(/^studies\/[0-9a-f]{11}\/source$/),
+  options: processingOptionsSchema,
+}).refine((v) => v.sourceObjectKey === `studies/${v.studyId}/source`, "Source namespace mismatch");
+export type PlayerSettings = z.infer<typeof playerSettingsSchema>;
+export type ProcessingOptions = z.infer<typeof processingOptionsSchema>;
+export type StudyCreation = z.infer<typeof studyCreationSchema>;
+export type ProcessingJob = z.infer<typeof processingJobSchema>;
+export type Manifest = z.infer<typeof manifestSchema>;
