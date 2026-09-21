@@ -82,43 +82,44 @@ function formatDate(value: string | null) {
 
 export function BillingPanel() {
   const { data: session } = authClient.useSession();
-  const [billing, setBilling] = useState<BillingStatus | null>(null);
-  const [billingLoading, setBillingLoading] = useState(false);
-  const [billingError, setBillingError] = useState("");
+  const [billingResult, setBillingResult] = useState<{
+    userId: string;
+    billing: BillingStatus | null;
+    error: string;
+  } | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<Plan | "portal" | null>(null);
   const sessionUserId = session?.user.id;
-  const currentBilling = sessionUserId ? billing : null;
+  const currentResult = sessionUserId && billingResult?.userId === sessionUserId ? billingResult : null;
+  const currentBilling = currentResult?.billing ?? null;
+  const billingError = currentResult?.error ?? "";
+  const billingLoading = Boolean(sessionUserId && !currentResult);
 
   useEffect(() => {
     let active = true;
-    if (!sessionUserId) {
-      setBilling(null);
-      setBillingError("");
-      setBillingLoading(false);
-      return;
-    }
-
-    setBilling(null);
-    setBillingError("");
-    setBillingLoading(true);
+    if (!sessionUserId) return;
 
     void fetch("/api/billing/status", { cache: "no-store" })
       .then(async (response) => {
         const data = await response.json().catch(() => ({})) as BillingStatus & { error?: string };
         if (!active) return;
         if (!response.ok) {
-          setBillingError(data.error ?? `Plan status unavailable (HTTP ${response.status})`);
+          setBillingResult({
+            userId: sessionUserId,
+            billing: null,
+            error: data.error ?? `Plan status unavailable (HTTP ${response.status})`,
+          });
           return;
         }
-        setBilling(data);
+        setBillingResult({ userId: sessionUserId, billing: data, error: "" });
       })
       .catch((error: unknown) => {
         if (!active) return;
-        setBillingError(error instanceof Error ? error.message : "Plan status unavailable");
-      })
-      .finally(() => {
-        if (active) setBillingLoading(false);
+        setBillingResult({
+          userId: sessionUserId,
+          billing: null,
+          error: error instanceof Error ? error.message : "Plan status unavailable",
+        });
       });
 
     return () => { active = false; };
