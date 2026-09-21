@@ -132,6 +132,59 @@ export const stripeEvents = pgTable("stripe_events", {
   processedAt: time("processed_at").notNull().defaultNow(),
 });
 
+export const studyComparisons = pgTable("study_comparisons", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  visibility: text("visibility", { enum: ["private", "public"] }).notNull().default("private"),
+  createdAt: time("created_at").notNull().defaultNow(),
+}, (t) => [
+  check("comparison_id_format", sql`${t.id} ~ '^[0-9a-f]{11}
+
+export const promptTemplates = pgTable("prompt_templates", {
+  id: text("id").notNull(),
+  version: text("version").notNull(),
+  systemPrompt: text("system_prompt").notNull(),
+  researchPrompt: text("research_prompt").notNull(),
+  coachingPrompt: text("coaching_prompt").notNull(),
+  createdAt: time("created_at").notNull(),
+}, (t) => [primaryKey({ columns: [t.id, t.version] })]);
+
+export const promptSnapshots = pgTable("prompt_snapshots", {
+  studyId: text("study_id").primaryKey().references(() => studies.id, { onDelete: "cascade" }),
+  templateId: text("template_id").notNull(),
+  templateVersion: text("template_version").notNull(),
+  prompt: text("prompt").notNull(),
+  createdAt: time("created_at").notNull(),
+}, (t) => [foreignKey({
+  columns: [t.templateId, t.templateVersion],
+  foreignColumns: [promptTemplates.id, promptTemplates.version],
+})]);
+`),
+  check("comparison_visibility", sql`${t.visibility} in ('private','public')`),
+]);
+
+export const comparisonStudies = pgTable("comparison_studies", {
+  comparisonId: text("comparison_id").notNull().references(() => studyComparisons.id, { onDelete: "cascade" }),
+  studyId: text("study_id").notNull().references(() => studies.id, { onDelete: "cascade" }),
+  position: integer("position").notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.comparisonId, t.studyId] }),
+  index("comparison_studies_position_idx").on(t.comparisonId, t.position),
+]);
+
+export const apiKeys = pgTable("api_keys", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  prefix: text("prefix").notNull(),
+  keyHash: text("key_hash").notNull().unique(),
+  createdAt: time("created_at").notNull().defaultNow(),
+  lastUsedAt: time("last_used_at"),
+  revokedAt: time("revoked_at"),
+}, (t) => [
+  index("api_keys_user_idx").on(t.userId),
+]);
+
 export const promptTemplates = pgTable("prompt_templates", {
   id: text("id").notNull(),
   version: text("version").notNull(),
