@@ -81,13 +81,11 @@ export function BillingPanel() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<Plan | "portal" | null>(null);
   const sessionUserId = session?.user.id;
+  const currentBilling = sessionUserId ? billing : null;
 
   useEffect(() => {
     let active = true;
-    if (!sessionUserId) {
-      setBilling(null);
-      return;
-    }
+    if (!sessionUserId) return;
     void fetch("/api/billing/status", { cache: "no-store" }).then(async (response) => {
       if (active && response.ok) setBilling(await response.json() as BillingStatus);
     });
@@ -132,25 +130,25 @@ export function BillingPanel() {
         <p className="section-index">PLANS & BILLING</p>
         <h2 id="plans-heading">使い方に合わせて、処理枠を広げる。</h2>
       </div>
-      {billing && <div className="current-plan-summary">
+      {currentBilling && <div className="current-plan-summary">
         <span>CURRENT PLAN</span>
-        <strong>{PLAN_LIMITS[billing.plan].label}</strong>
+        <strong>{PLAN_LIMITS[currentBilling.plan].label}</strong>
         <p>
-          {billing.plan === "free" && !billing.usage.canCreate && billing.usage.nextAvailableAt
-            ? `次のStudy: ${formatDate(billing.usage.nextAvailableAt)}`
-            : billing.plan === "plus"
-              ? `${billing.usage.used} / 30 used · rolling 7 days`
-              : billing.usage.publicLimitLabel}
+          {currentBilling.plan === "free" && !currentBilling.usage.canCreate && currentBilling.usage.nextAvailableAt
+            ? `次のStudy: ${formatDate(currentBilling.usage.nextAvailableAt)}`
+            : currentBilling.plan === "plus"
+              ? `${currentBilling.usage.used} / 30 used · rolling 7 days`
+              : currentBilling.usage.publicLimitLabel}
         </p>
-        {billing.subscription?.currentPeriodEnd && <small>
-          {billing.subscription.cancelAtPeriodEnd ? "終了予定" : "次回更新"}: {formatDate(billing.subscription.currentPeriodEnd)}
+        {currentBilling.subscription?.currentPeriodEnd && <small>
+          {currentBilling.subscription.cancelAtPeriodEnd ? "終了予定" : "次回更新"}: {formatDate(currentBilling.subscription.currentPeriodEnd)}
         </small>}
       </div>}
     </div>
 
     <div className="pricing-grid">
       {(["free", "plus", "pro"] as const).map((plan) => {
-        const current = billing?.plan === plan;
+        const current = currentBilling?.plan === plan;
         const copy = planCopy[plan];
         return <article className={`pricing-card ${plan === "plus" ? "featured" : ""}`} key={plan}>
           <div className="pricing-topline">
@@ -181,11 +179,11 @@ export function BillingPanel() {
             type="button"
             className="primary-button pricing-button"
             disabled={!session || busy !== null}
-            onClick={() => void (billing && billing.plan !== "free" ? portal() : checkout(plan))}
+            onClick={() => void (currentBilling && currentBilling.plan !== "free" ? portal() : checkout(plan))}
           >
             {!session
               ? "ログイン後に選択"
-              : billing && billing.plan !== "free"
+              : currentBilling && currentBilling.plan !== "free"
                 ? "Billing Portalでプラン変更"
                 : busy === plan
                   ? "Opening Stripe…"
