@@ -1520,3 +1520,180 @@ input[type="file"]::file-selector-button {
     width: 100%;
   }
 }
+
+.session-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.session-actions .secondary-button {
+  text-decoration: none;
+}
+
+.auth-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+
+.auth-actions .primary-button,
+.auth-actions .secondary-button {
+  width: 100%;
+  min-height: 48px;
+}
+
+.consent-fields {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(112, 99, 79, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 250, 241, 0.5);
+}
+
+.consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 0;
+}
+
+.consent-check input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 2px 0 0;
+  accent-color: var(--olive-dark);
+}
+
+.consent-check span {
+  color: var(--muted-ink);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.consent-check a {
+  color: var(--olive-dark);
+  font-weight: 750;
+  text-underline-offset: 3px;
+}
+
+.account-section {
+  margin: 18px 0;
+  padding: 28px;
+  border: 1px solid rgba(112, 99, 79, 0.22);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(255, 252, 246, 0.94), rgba(246, 240, 230, 0.86));
+  box-shadow: var(--shadow-soft);
+}
+
+.account-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.account-info-grid > div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 15px;
+  border: 1px solid rgba(112, 99, 79, 0.16);
+  border-radius: 13px;
+  background: rgba(255, 250, 241, 0.58);
+}
+
+.account-info-grid span,
+.passkey-list small {
+  color: var(--muted-ink);
+  font-size: 0.72rem;
+}
+
+.account-info-grid strong {
+  overflow-wrap: anywhere;
+  font-size: 0.88rem;
+}
+
+.passkey-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.passkey-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.passkey-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 13px 14px;
+  border: 1px solid rgba(112, 99, 79, 0.17);
+  border-radius: 13px;
+  background: rgba(255, 252, 246, 0.58);
+}
+
+.passkey-list span {
+  display: grid;
+  gap: 3px;
+}
+
+.passkey-list strong {
+  font-size: 0.84rem;
+}
+
+.account-danger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.account-danger h2 {
+  margin: 7px 0 0;
+  font-size: 1.2rem;
+}
+
+.legal-copy {
+  line-height: 1.8;
+}
+
+.legal-copy h2 {
+  margin-top: 28px;
+}
+
+.legal-copy h2:first-child {
+  margin-top: 0;
+}
+
+.legal-copy p {
+  color: #55564f;
+}
+
+@media (max-width: 640px) {
+  .auth-actions,
+  .account-info-grid,
+  .passkey-create {
+    grid-template-columns: 1fr;
+  }
+
+  .session-actions,
+  .account-danger,
+  .passkey-list > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .session-actions .secondary-button,
+  .account-danger .secondary-button,
+  .passkey-list .secondary-button {
+    width: 100%;
+  }
+}
