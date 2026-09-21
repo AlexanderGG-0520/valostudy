@@ -79,6 +79,7 @@ export async function buildManifest(id: string, viewerId?: string) {
   if (!study) throw new HttpError(404, "Study not found");
   const [snapshot] = await db().select().from(promptSnapshots).where(eq(promptSnapshots.studyId, id));
   if (!snapshot) throw new Error("Missing prompt snapshot");
+  const [job] = await db().select({ progress: jobs.progress }).from(jobs).where(eq(jobs.studyId, id));
   const rows = study.status === "completed" && !study.framesExpiredAt
     ? await db().select().from(frames).where(eq(frames.studyId, id)).orderBy(asc(frames.name))
     : [];
@@ -87,6 +88,7 @@ export async function buildManifest(id: string, viewerId?: string) {
     studyId: id,
     player: study.player,
     status: study.status,
+    processingProgress: job?.progress ?? null,
     framesExpiredAt: study.framesExpiredAt?.toISOString() ?? null,
     frames: rows.map((f) => ({ timestampMs: f.timestampMs, url: `/${id}/frames/${f.name}` })),
     timestampNote: "Sampling timeline; timestamps are approximate, not original frame PTS.",
@@ -187,7 +189,11 @@ export async function enqueueCompletedUpload(id: string, ownerId: string) {
     }).onConflictDoNothing();
 
     await tx.update(uploads).set({ completedAt: now }).where(eq(uploads.studyId, id));
-    await tx.insert(jobs).values({ studyId: id, status: "pending" }).onConflictDoNothing();
+    await tx.insert(jobs).values({
+      studyId: id,
+      status: "pending",
+      progress: { stage: "queued", percent: 0, processedFrames: null, totalFrames: null, startedAt: null },
+    }).onConflictDoNothing();
     await tx.update(studies).set({ status: "queued" }).where(eq(studies.id, id));
   });
 }
