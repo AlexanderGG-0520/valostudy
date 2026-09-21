@@ -68,7 +68,8 @@ describe("object storage namespace and parts", () => {
   });
   it("bounds every part, including the final partial part", () => {
     expect(partSize(PART_BYTES + 123, 1)).toBe(PART_BYTES);
-    expect(partSize(PART_BYTES + 123, 2)).toBe(123);\n    expect(MAX_UPLOAD_PARTS).toBe(Math.ceil(MAX_UPLOAD_BYTES / PART_BYTES));
+    expect(partSize(PART_BYTES + 123, 2)).toBe(123);
+    expect(MAX_UPLOAD_PARTS).toBe(Math.ceil(MAX_UPLOAD_BYTES / PART_BYTES));
     for (const part of [0, -1, 3, 1.5]) expect(() => partSize(PART_BYTES + 123, part)).toThrow();
   });
 });
