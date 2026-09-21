@@ -98,6 +98,25 @@ pnpm db:migrate
 
 テストはservice・credential不要、FFmpeg/FFprobeは必須です。PGliteで実SQL migrationとDB制約、認可、upload再実行を検証します。本番PostgreSQL / R2 / Valkeyを組み合わせたend-to-end検証は別途必要です。GitHub Actionsもinstall・lint・typecheck・test・buildを実行します。
 
+### Real-service browser E2E
+
+Docker Engine（起動済みで現在のユーザーが利用可能）、Docker Compose、FFmpeg/FFprobeが必要です。通常のunitテストとは分離しています。
+
+```bash
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+# Ubuntu CI等でブラウザのOS依存関係も必要な場合:
+# pnpm exec playwright install --with-deps chromium
+pnpm build
+pnpm test:e2e
+```
+
+runnerが専用Compose projectでPostgreSQL 17、Valkey 8、MinIOを起動し、ランダムなcredential・loopback port・bucketを作成します。既存.env・開発DB・開発bucketは使いません。実DBへmigrationを2回適用し、production standalone Webと独立Workerを起動します。FFmpegで16MiB超のAVIを生成し、Chromiumから別originのMinIOへ直接multipart PUTします。
+
+公開／非公開のmanifestとWebP取得、owner認可、不正動画のbounded retry、partサイズ検証、並行completeの冪等性を検証します。DB・queue・storage・HTTP・FFmpegはmockせず、Playwright側でPostgreSQLとBullMQの終端状態も確認します。R2固有の互換性やKubernetes配置は対象外です。
+
+成功・失敗時ともテスト用process/container/tmpfsデータと動画fixtureを削除します。ログと失敗時スクリーンショットは `.e2e-artifacts/<run-id>/` に残します。署名URLやcookieを含むtrace/HARは記録しません。CIの独立 `e2e` jobも同じcommandを実行し、診断artifactを3日間保存します。強制終了・ホスト停止で残った場合は、ログのrun-idと `docker compose ls` で対象を確認し、その `valostudy-e2e-<run-id>` projectのみ削除してください。
+
 ## Study / manifest URL
 
 Study IDは `crypto.randomBytes(6)` から作る11文字lowercase hex（44bit）、正規表現は `^[0-9a-f]{11}$`。DBのPRIMARY KEYとCHECKで保証し、衝突は最大8回まで再生成します。IDは認証tokenではありません。

@@ -1,0 +1,33 @@
+# Disposable E2E services. No named volumes or access to development data.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: valostudy_e2e
+      POSTGRES_USER: valostudy_e2e
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?E2E runner supplies this}
+    ports: ["127.0.0.1:${E2E_PG_PORT:?}:5432"]
+    tmpfs: ["/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U valostudy_e2e -d valostudy_e2e"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports: ["127.0.0.1:${E2E_VALKEY_PORT:?}:6379"]
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?}
+      MINIO_API_CORS_ALLOW_ORIGIN: ${BETTER_AUTH_URL:?}
+    ports: ["127.0.0.1:${E2E_S3_PORT:?}:9000"]
+    tmpfs: ["/data"]
