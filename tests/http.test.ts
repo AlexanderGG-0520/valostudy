@@ -34,7 +34,7 @@ it("logs storage operation and provider metadata without exposing it to the clie
 
     const result = await handle(async () => {
       throw new StorageOperationError("CreateMultipartUpload", providerError);
-    }, { operation: "study.create" });
+    }, { requestOperation: "study.create" });
 
     expect(result.status).toBe(500);
     expect(await result.text()).not.toContain("Credential access key");
@@ -43,6 +43,7 @@ it("logs storage operation and provider metadata without exposing it to the clie
     const entry = JSON.parse(line) as Record<string, unknown>;
     expect(entry).toMatchObject({
       event: "request_failed",
+      requestOperation: "study.create",
       operation: "CreateMultipartUpload",
       reason: "StorageOperationError",
       causeReason: "InvalidArgument",
