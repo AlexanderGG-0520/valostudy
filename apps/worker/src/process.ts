@@ -5,11 +5,13 @@ import { join } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { Job } from "bullmq";
-import { db, studies, jobs, uploads, frames, eq, and, inArray } from "@valostudy/db";
-import { processingJobSchema, MAX_UPLOAD_BYTES } from "@valostudy/schema";
+import { db, studies, jobs, uploads, frames, usageEvents, eq, and, inArray, isNull } from "@valostudy/db";
+import { PLAN_LIMITS, processingJobSchema } from "@valostudy/schema";
 import { Storage, frameKey, sourceKey } from "@valostudy/storage";
 import { log } from "@valostudy/config";
 import { extract } from "./media";
+
+const DAY = 24 * 60 * 60 * 1000;
 
 export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade" | "opts">) {
   const payload = processingJobSchema.parse(job.data);
@@ -18,7 +20,9 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
   const [upload] = await db().select().from(uploads).where(eq(uploads.studyId, id));
   if (!study || !upload?.completedAt || upload.objectKey !== sourceKey(id)) throw new Error("Invalid processing source");
 
+  const limits = PLAN_LIMITS[study.plan];
   const storage = new Storage();
+
   if (study.status === "completed") {
     await storage.delete(upload.objectKey);
     log("source_discarded", { studyId: id, jobId: job.id, stage: "discard_source", reason: "completed_retry" });
@@ -28,6 +32,7 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
   const started = Date.now();
   let stage = "download";
   let directory: string | undefined;
+
   try {
     await db().transaction(async (tx) => {
       await tx.update(studies).set({ status: "processing" }).where(eq(studies.id, id));
@@ -38,7 +43,7 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
         updatedAt: new Date(),
       }).where(eq(jobs.studyId, id));
     });
-    log("processing_started", { studyId: id, jobId: job.id, stage, retryCount: job.attemptsMade });
+    log("processing_started", { studyId: id, jobId: job.id, stage, retryCount: job.attemptsMade, plan: study.plan });
 
     directory = await mkdtemp(join(tmpdir(), "valostudy-"));
     const source = join(directory, "source");
@@ -51,9 +56,12 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
     const limit = new Transform({
       transform(chunk: Buffer, _encoding, callback) {
         bytes += chunk.length;
-        callback(bytes > MAX_UPLOAD_BYTES || bytes > upload.expectedBytes ? new Error("Source exceeds byte limit") : null, chunk);
+        callback(bytes > limits.maxUploadBytes || bytes > upload.expectedBytes
+          ? new Error("Source exceeds plan byte limit")
+          : null, chunk);
       },
     });
+
     const reader = object.Body.transformToWebStream().getReader();
     async function* chunks() {
       try {
@@ -67,6 +75,7 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
         reader.releaseLock();
       }
     }
+
     await pipeline(
       Readable.from(chunks()),
       limit,
@@ -77,8 +86,10 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
 
     stage = "ffmpeg";
     const ffmpegStarted = Date.now();
-    // Read options from PostgreSQL; queued payload cannot override the saved Study.
-    const result = await extract(source, output, study.options);
+    const result = await extract(source, output, study.options, {
+      maxVideoSeconds: limits.maxVideoSeconds,
+      maxFrames: limits.maxFrames,
+    });
     log("frames_extracted", {
       studyId: id,
       jobId: job.id,
@@ -95,20 +106,28 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
       rows.push({ ...frame, studyId: id, objectKey: key });
     }
 
+    const completedAt = new Date();
+    const retentionUntil = limits.retentionDays === null
+      ? null
+      : new Date(completedAt.getTime() + limits.retentionDays * DAY);
+
     await db().transaction(async (tx) => {
       await tx.delete(frames).where(eq(frames.studyId, id));
       await tx.insert(frames).values(rows);
       await tx.update(uploads).set({ metadata: result.metadata }).where(eq(uploads.studyId, id));
-      await tx.update(studies).set({ status: "completed" }).where(eq(studies.id, id));
+      await tx.update(studies).set({
+        status: "completed",
+        completedAt,
+        retentionUntil,
+        framesExpiredAt: null,
+      }).where(eq(studies.id, id));
       await tx.update(jobs).set({
         status: "completed",
         error: null,
-        updatedAt: new Date(),
+        updatedAt: completedAt,
       }).where(eq(jobs.studyId, id));
     });
 
-    // The source recording is only temporary. Frames are durable before this delete.
-    // If deletion fails, throwing lets BullMQ retry; the completed fast-path retries only the delete.
     stage = "discard_source";
     await storage.delete(upload.objectKey);
     log("source_discarded", { studyId: id, jobId: job.id, stage });
@@ -119,6 +138,7 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
       stage,
       duration: Date.now() - started,
       frameCount: rows.length,
+      plan: study.plan,
     });
   } catch (e) {
     const status = job.attemptsMade + 1 < (job.opts.attempts ?? 1) ? "queued" : "failed";
@@ -135,9 +155,14 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
         eq(jobs.studyId, id),
         inArray(jobs.status, ["pending", "queued", "processing", "failed"]),
       ));
+      if (status === "failed") {
+        await tx.update(usageEvents).set({ releasedAt: new Date() }).where(and(
+          eq(usageEvents.studyId, id),
+          isNull(usageEvents.releasedAt),
+        ));
+      }
     });
 
-    // A terminally failed Study has no reason to retain a multi-gigabyte source.
     if (status === "failed") {
       try {
         await storage.delete(upload.objectKey);
@@ -161,7 +186,6 @@ export async function processVideo(job: Pick<Job, "data" | "id" | "attemptsMade"
     });
     throw e;
   } finally {
-    // directory is a fresh mkdtemp path controlled by this process.
     if (directory) await rm(directory, { recursive: true, force: true });
   }
 }
