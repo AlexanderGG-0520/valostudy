@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+const workerTuningSchema = z.object({
+  WORKER_FFMPEG_THREADS: z.coerce.number().int().min(1).max(32).default(2),
+  WORKER_FRAME_UPLOAD_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(16),
+});
+
 const schema = z.object({
   DATABASE_URL: z.url(),
   REDIS_URL: z.url(),
@@ -16,8 +21,7 @@ const schema = z.object({
   STRIPE_PRO_PRICE_ID: z.string().min(1).optional(),
   STRIPE_PLUS_PAYMENT_LINK_URL: z.url().default("https://buy.stripe.com/5kQbJ0gR2fp9alR1ow9IQ04"),
   STRIPE_PRO_PAYMENT_LINK_URL: z.url().default("https://buy.stripe.com/cNi6oG58k1yj3Xtd7e9IQ05"),
-  WORKER_FFMPEG_THREADS: z.coerce.number().int().min(1).max(32).default(2),
-  WORKER_FRAME_UPLOAD_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(16),
+  ...workerTuningSchema.shape,
 }).superRefine((value, ctx) => {
   const hostname = new URL(value.S3_ENDPOINT).hostname.toLowerCase();
   if (!hostname.endsWith(".r2.cloudflarestorage.com")) return;
@@ -50,6 +54,10 @@ export class ConfigurationError extends Error {
     super(`Invalid server configuration: ${issues.join("; ")}`);
     this.name = "ConfigurationError";
   }
+}
+
+export function workerTuning() {
+  return workerTuningSchema.parse(process.env);
 }
 
 export function config() {
