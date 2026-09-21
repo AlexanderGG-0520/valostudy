@@ -17,7 +17,7 @@ Browser ── JSON / session ── Next.js control plane ── PostgreSQL
 AI → /{id} → /{id}/manifest.json → /{id}/frames/000001.webp
 ```
 
-Next.jsは認証、DB、Study作成、uploadの署名と完了通知、閲覧を担当します。動画本体はブラウザからstorageへ直接送信します。FFmpegは独立Workerのみで実行します。完了通知でDBにjobを記録し、Worker内dispatcherが10秒ごとにBullMQへ投入するため、投入前の障害から復旧できます。
+Next.jsは認証、Stripe課金、entitlement、Study作成、uploadの署名と完了通知、閲覧を担当します。動画本体はブラウザからstorageへ直接送信します。FFmpegは独立Workerのみで実行します。完了通知でDBにjobを記録し、Worker内dispatcherが10秒ごとにBullMQへ投入するため、投入前の障害から復旧できます。
 
 ## Monorepo
 
@@ -80,8 +80,27 @@ MinIOのバージョンがbucket CORS APIをサポートしない場合は `MINI
 | S3_REGION | MinIO: us-east-1 / R2: auto |
 | S3_BUCKET | private bucket名 |
 | S3_ACCESS_KEY / S3_SECRET_KEY | bucket操作権限のcredential |
+| STRIPE_SECRET_KEY | Stripe server secret key |
+| STRIPE_WEBHOOK_SECRET | `/api/billing/webhook` の署名検証secret |
+| STRIPE_PLUS_PRICE_ID | $20/月 Plus recurring Price ID |
+| STRIPE_PRO_PRICE_ID | $200/月 Pro recurring Price ID |
 
 .envはGit対象外です。CLI/Workerは.envを自動ロードしません。上記のようにexportするか、container/Kubernetesから注入してください。秘密と署名URLをアクセスログへ記録しないでください。
+
+
+## Plans / Stripe billing
+
+| Plan | Study limit | Video / upload | Sampling | Frame retention | Queue |
+|---|---|---|---|---|---|
+| Free | 1 Studyごとに6時間cooldown | 2h / 16GiB | 最大1 FPS / 7,200 frames | 30日 | Standard |
+| Plus ($20/月) | 30 Studies / rolling 7 days | 2h / 32GiB | 最大2 FPS / 14,400 frames | 1年 | Priority |
+| Pro ($200/月) | UI上Unlimited（fair-use保護あり） | 4h / 64GiB | 最大5 FPS / 72,000 frames | 期限なし | Highest |
+
+FreeのcooldownとPlus/Proのrolling quotaは、Study作成ボタンではなくmultipart uploadが正常完了してprocessingへ投入される時点で消費します。アップロード途中の失敗では消費しません。Workerが最終的に動画を処理できなかった場合はusage eventをreleaseするため、利用枠が戻ります。同一ユーザーのcompleteはPostgreSQL row lockで直列化し、並行requestによるquota超過を防ぎます。
+
+Stripe Checkoutは `POST /api/billing/checkout`、Customer Portalは `POST /api/billing/portal`、状態表示は `GET /api/billing/status`。Webhookは `POST /api/billing/webhook` でraw bodyと `Stripe-Signature` をHMAC検証し、event IDをDBへ保存して冪等処理します。`customer.subscription.created/updated/deleted` をentitlement source of truthとし、解約予約はperiod endまで有効、`past_due` はperiod endから3日graceを持ちます。
+
+Stripe DashboardではPlus/Proのrecurring Priceを作成して上記Price IDを設定し、Webhook endpointへ `checkout.session.completed` と `customer.subscription.*` を送信してください。Customer Portalでsubscription cancellationとPlus/Pro間のplan changeを許可してください。既にpaid subscriptionがあるユーザーのplan変更は二重subscription防止のためCheckoutではなくPortalへ送ります。
 
 ## Commands / tests
 
@@ -138,9 +157,9 @@ manifestはschemaVersion、studyId、player、frames、coachingProtocol、prompt
 7. フレームの永続化とDB更新が完了した直後に元動画objectを削除。処理が最終失敗した場合も元動画を削除。
 8. Workerが期限切れ未完了sessionをabort・削除し、BullMQのstalled/failed状態をDBへ同期。
 
-最大16GiB・2時間・4K相当。録画全体を0.25/0.5/1/2 FPSでサンプリングし、1 Studyあたり最大3600枚です。Web UIの既定値は0.5 FPS（2秒ごと）。FFprobe 60秒、download 2時間、FFmpeg 30分のtimeoutです。shellを使わず検証済みの引数配列を渡します。入力はローカルのMP4/MOV、MKV/WebM、AVIに制限し、ネットワークplaylistを受け付けません。timestampMsはサンプリング時刻の目安で、厳密な元フレームPTSではありません。
+上限はplan snapshotで決まり、Freeは16GiB/2時間/1 FPS、Plusは32GiB/2時間/2 FPS、Proは64GiB/4時間/5 FPSです。録画全体を0.25/0.5/1/2/5 FPSでサンプリングし、最大frame数もplanごとに7,200/14,400/72,000枚へ制限します。Web UIの既定値は0.5 FPS（2秒ごと）。FFprobe 60秒、download 2時間、FFmpeg 30分のtimeoutです。shellを使わず検証済みの引数配列を渡します。入力はローカルのMP4/MOV、MKV/WebM、AVIに制限し、ネットワークplaylistを受け付けません。timestampMsはサンプリング時刻の目安で、厳密な元フレームPTSではありません。
 
-Studyはpending → queued → processing → completed / failed。DB jobのpendingは投入待ちです。dispatcher再起動後に未投入・stalled jobを回収します。completed/failedのBullMQ jobは自動削除しません。保持ポリシーは運用で追加してください。
+Studyはpending → queued → processing → completed / failed。DB jobのpendingは投入待ちです。dispatcher再起動後に未投入・stalled jobを回収します。Queue priorityはFree/Plus/Proで段階化しています。completed frameはFree 30日、Plus 1年でWorkerがobject storageとDBから削除し、Study metadataとprompt snapshotは残します。Pro frameには自動expiryを設定しません。
 
 ## Prompt snapshots / Reddit research
 
@@ -164,12 +183,12 @@ WebはNext standalone、WorkerはFFmpeg入りNode image。Workerはworkspace Typ
 JSON logsにstudyId、jobId、stage、duration、frameCount、retryCount、error reasonを付与します。OpenTelemetry、Prometheus、Grafana、Lokiのexporter/dashboardは未実装です。
 
 - Better Authのemail/password登録・ログインとowner認可を実装。email verification、password reset、OAuth、MFA、分散rate limitは未実装。
-- account quota、使用量制限、WAF、storage lifecycleの自動設定は未実装。
+- Free/Plus/Pro quota、Stripe subscription、frame retentionは実装済み。WAFとbucket lifecycleの自動設定は未実装。
 - 公開範囲変更、削除UI、失効・期限付き共有、frame選択、再処理UI、Study一覧は未実装。
 - ページ再読込後のupload再開、complete通知のUI再試行は未実装。中断multipartは4時間後に回収。
-- 作成途中のクラッシュで残るpending Study、DB未記録multipartの完全回収、frameの保持期限は未実装。元動画は正常完了または最終失敗時にWorkerが削除し、bucket lifecycleは異常終了時の補完として必要です。
+- 作成途中のクラッシュで残るpending Study、DB未記録multipartの完全回収は未実装。frame保持期限はWorkerが処理します。元動画は正常完了または最終失敗時にWorkerが削除し、bucket lifecycleは異常終了時の補完として必要です。
 - FFmpeg専用sandbox/network policy、DB/queue readiness、アラート、queue retentionは追加対象。health endpointは生存確認のみ。
-- 高度なCV、OCR、音声解析、自動コーチングAI、billingは未実装。
+- 高度なCV、OCR、音声解析、自動コーチングAI、Pro向けadaptive sampling/workspace/APIは未実装。
 - 旧FastAPI/SQLiteからのデータmigrationはありません。旧実装はGit commit `d8c6a13` に残っています。
 
 ## References / license
