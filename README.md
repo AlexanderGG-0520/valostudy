@@ -1,6 +1,6 @@
 # ValoStudy
 
-VALORANTの録画とプレイヤー設定からコーチング用フレームを抽出し、AIがURLで取得できるStudyページ・JSON manifestを作るSaaS基盤です。AIの自動実行は行いません。
+VALORANTの試合全体の録画とプレイヤー設定からコーチング用フレームを抽出し、AIがURLで取得できるStudyページ・JSON manifestを作るSaaS基盤です。元動画は処理中だけ一時保持し、フレーム保存完了後に削除します。AIの自動実行は行いません。
 
 ## Architecture
 
@@ -53,7 +53,7 @@ pnpm dev
 pnpm dev:worker
 ```
 
-http://localhost:3000 で登録・ログインし、アップロード前にプレイヤー設定・抽出区間・公開範囲を入力します。デフォルトはprivate（ownerのみ）。publicを選ぶとAIがログインなしで取得できます。公開Studyのframe・設定・状況メモは誰でも閲覧できます。
+http://localhost:3000 で登録・ログインし、アップロード前にプレイヤー設定・試合全体の録画・フレーム抽出間隔・公開範囲を入力します。開始秒や終了秒の指定はなく、録画全体を処理します。デフォルトはprivate（ownerのみ）。publicを選ぶとAIがログインなしで取得できます。公開Studyのframe・設定・状況メモは誰でも閲覧できます。
 
 MinIO consoleは http://localhost:9001 。privateの `valostudy` bucketを作成し、ブラウザのPUTを許可するCORSを設定します。AWS CLIを使う例（初回のみcreate-bucket）:
 
@@ -129,15 +129,16 @@ manifestはschemaVersion、studyId、player、frames、coachingProtocol、prompt
 
 ## Storage / queue / processing
 
-1. `POST /api/studies` に小さなJSONを送信。Study、設定、prompt snapshot、1時間のmultipart sessionを作成。
+1. `POST /api/studies` に小さなJSONを送信。Study、設定、prompt snapshot、4時間のmultipart sessionを作成。
 2. `POST /api/uploads/{id}/parts` でpartNumberを指定。最大15分かつsession期限内の署名URLを取得。
 3. Browserから16MiB単位で直接PUT。最後のpartのみ小さくなります。署名は想定Content-Lengthを含み、各part最大3回試行します。
 4. `POST /api/uploads/{id}/complete` がListPartsの枚数・番号・サイズと完成objectのHEADサイズを検査。row lockで直列化し、再送は冪等。
 5. 同一DB transactionで永続jobを作成。dispatcherがstable job IDでBullMQへ投入。最大3回の試行とexponential backoff。
-6. Workerがstream download、FFprobe検証、FFmpeg抽出、WebP保存、動画/frame metadataとDB状態更新を実行。
-7. Workerが期限切れ未完了sessionをabort・削除し、BullMQのstalled/failed状態をDBへ同期。
+6. Workerがstream download、FFprobe検証、録画全体のFFmpeg抽出、WebP保存、動画/frame metadataとDB状態更新を実行。
+7. フレームの永続化とDB更新が完了した直後に元動画objectを削除。処理が最終失敗した場合も元動画を削除。
+8. Workerが期限切れ未完了sessionをabort・削除し、BullMQのstalled/failed状態をDBへ同期。
 
-最大4GiB・8時間・4K相当。抽出は最大120秒・300枚。FFprobe 30秒、download 300秒、FFmpeg 300秒のtimeoutです。shellを使わず検証済みの引数配列を渡します。入力はローカルのMP4/MOV、MKV/WebM、AVIに制限し、ネットワークplaylistを受け付けません。timestampMsはサンプリング時刻の目安で、厳密な元フレームPTSではありません。
+最大16GiB・2時間・4K相当。録画全体を0.25/0.5/1/2 FPSでサンプリングし、1 Studyあたり最大3600枚です。Web UIの既定値は0.5 FPS（2秒ごと）。FFprobe 60秒、download 2時間、FFmpeg 30分のtimeoutです。shellを使わず検証済みの引数配列を渡します。入力はローカルのMP4/MOV、MKV/WebM、AVIに制限し、ネットワークplaylistを受け付けません。timestampMsはサンプリング時刻の目安で、厳密な元フレームPTSではありません。
 
 Studyはpending → queued → processing → completed / failed。DB jobのpendingは投入待ちです。dispatcher再起動後に未投入・stalled jobを回収します。completed/failedのBullMQ jobは自動削除しません。保持ポリシーは運用で追加してください。
 
@@ -165,8 +166,8 @@ JSON logsにstudyId、jobId、stage、duration、frameCount、retryCount、error
 - Better Authのemail/password登録・ログインとowner認可を実装。email verification、password reset、OAuth、MFA、分散rate limitは未実装。
 - account quota、使用量制限、WAF、storage lifecycleの自動設定は未実装。
 - 公開範囲変更、削除UI、失効・期限付き共有、frame選択、再処理UI、Study一覧は未実装。
-- ページ再読込後のupload再開、complete通知のUI再試行は未実装。中断multipartは1時間後に回収。
-- 作成途中のクラッシュで残るpending Study、DB未記録multipartの完全回収、完成動画・frameの保持期限は未実装。bucket lifecycleで補完が必要。
+- ページ再読込後のupload再開、complete通知のUI再試行は未実装。中断multipartは4時間後に回収。
+- 作成途中のクラッシュで残るpending Study、DB未記録multipartの完全回収、frameの保持期限は未実装。元動画は正常完了または最終失敗時にWorkerが削除し、bucket lifecycleは異常終了時の補完として必要です。
 - FFmpeg専用sandbox/network policy、DB/queue readiness、アラート、queue retentionは追加対象。health endpointは生存確認のみ。
 - 高度なCV、OCR、音声解析、自動コーチングAI、billingは未実装。
 - 旧FastAPI/SQLiteからのデータmigrationはありません。旧実装はGit commit `d8c6a13` に残っています。
