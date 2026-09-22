@@ -1,3 +1,5 @@
+import { log } from "@valostudy/config";
+
 function settings() {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const from = process.env.RESEND_FROM_EMAIL?.trim();
@@ -44,3 +46,11 @@ export async function sendVerificationEmail(to: string, url: string) {
   }
 }
 
+export function sendVerificationEmailDetached(to: string, url: string) {
+  void sendVerificationEmail(to, url).catch((error: unknown) => {
+    log("auth_verification_email_failed", {
+      reason: error instanceof Error ? error.name : "Unknown",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  });
+}

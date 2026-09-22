@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 import { Queue } from "bullmq";
 import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
-import { manifestSchema, PART_BYTES, type Manifest } from "@valostudy/schema";
+import { manifestSchema, vcmrMatchSchema, PART_BYTES, type Manifest } from "@valostudy/schema";
 import { config, redisConnection, QUEUE_NAME } from "@valostudy/config";
 import { input } from "../fixtures";
 
@@ -92,6 +92,24 @@ for (const visibility of ["public", "private"] as const) {
     expect(manifest.coachingProtocol).toEqual({ redditResearchRequired: true, promptTemplateVersion: "v1" });
     expect(JSON.stringify(manifest)).not.toContain(c.S3_ENDPOINT);
     expect(JSON.stringify(manifest)).not.toContain("studies/");
+
+    const canonicalResponse = await page.request.get(`/${id}/canonical.json`);
+    expect(canonicalResponse.status()).toBe(200);
+    expect(canonicalResponse.headers()["content-type"]).toContain("application/vnd.valostudy.vcmr+json");
+    const canonical = vcmrMatchSchema.parse(await canonicalResponse.json());
+    expect(canonical.schema).toBe("valostudy.vcmr");
+    expect(canonical.schemaVersion).toBe("1.0.0");
+    expect(canonical.study).toMatchObject({ id, game: "valorant", visibility, status: "completed" });
+    expect(canonical.media.sampling.fps).toBe(1);
+    expect(canonical.frames.map((frame) => frame.id)).toEqual([
+      "frame_000001",
+      "frame_000002",
+      "frame_000003",
+    ]);
+    expect(canonical.rounds).toEqual([]);
+    expect(canonical.events).toEqual([]);
+    expect(canonical.annotations).toEqual([]);
+
     const row = await persisted(id, "completed");
     expect(row.attempts).toBe(1);
     await expect.poll(async () => {
@@ -116,7 +134,12 @@ for (const visibility of ["public", "private"] as const) {
     await expect(page.locator("img")).toHaveCount(3);
     const anonymous = await browser.newContext({ baseURL: c.BETTER_AUTH_URL });
     try {
-      for (const path of ["/" + id, "/" + id + "/manifest.json", manifest.frames[0].url])
+      for (const path of [
+        "/" + id,
+        "/" + id + "/manifest.json",
+        "/" + id + "/canonical.json",
+        manifest.frames[0].url,
+      ])
         expect((await anonymous.request.get(path)).status()).toBe(visibility === "public" ? 200 : 404);
       // Even another authenticated account cannot mutate the owner's upload.
       const other = await anonymous.newPage();

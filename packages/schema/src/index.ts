@@ -111,15 +111,114 @@ export const playerSettingsSchema = z.object({
   context: z.string().max(6000).default(""),
 });
 
+export const samplingFpsSchema = z.union([
+  z.literal(0.25),
+  z.literal(0.5),
+  z.literal(1),
+  z.literal(2),
+  z.literal(5),
+]);
+
 export const processingOptionsSchema = z.object({
-  fps: z.union([
-    z.literal(0.25),
-    z.literal(0.5),
-    z.literal(1),
-    z.literal(2),
-    z.literal(5),
-  ]).default(0.5),
+  fps: samplingFpsSchema.default(0.5),
 });
+
+export const VCMR_SCHEMA = "valostudy.vcmr" as const;
+export const VCMR_SCHEMA_VERSION = "1.0.0" as const;
+export const VCMR_TIMESTAMP_SEMANTICS = "Sampling timeline; timestamps are approximate, not original frame PTS." as const;
+
+export const vcmrFrameIdSchema = z.string().regex(/^frame_[0-9]{6}$/);
+export const vcmrFrameCoreSchema = z.object({
+  id: vcmrFrameIdSchema,
+  name: frameNameSchema,
+  timestampMs: z.number().int().nonnegative(),
+  source: z.object({
+    kind: z.literal("fixed_rate_sampling"),
+    approximateTimestamp: z.literal(true),
+  }),
+});
+
+export const vcmrFrameSchema = vcmrFrameCoreSchema.extend({
+  url: z.string().regex(/^\/[0-9a-f]{11}\/frames\/[0-9]{6}\.(?:jpg|webp)$/),
+});
+
+export const vcmrMediaSchema = z.object({
+  width: z.number().int().positive().nullable(),
+  height: z.number().int().positive().nullable(),
+  durationMs: z.number().int().positive().nullable(),
+  sampling: z.object({
+    fps: samplingFpsSchema,
+    strategy: z.literal("fixed_rate"),
+    timestampSemantics: z.literal(VCMR_TIMESTAMP_SEMANTICS),
+  }),
+});
+
+export const vcmrRoundSchema = z.object({
+  id: z.string().regex(/^round_[0-9]{2,3}$/),
+  number: z.number().int().positive(),
+  startMs: z.number().int().nonnegative(),
+  endMs: z.number().int().nonnegative().nullable(),
+});
+
+export const vcmrEventSchema = z.object({
+  id: z.string().regex(/^event_[0-9]+$/),
+  type: z.string().regex(/^[a-z][a-z0-9_]*$/),
+  timestampMs: z.number().int().nonnegative(),
+  roundId: vcmrRoundSchema.shape.id.nullable(),
+  confidence: z.number().min(0).max(1).nullable(),
+  evidenceFrameIds: z.array(vcmrFrameIdSchema).default([]),
+});
+
+export const vcmrAnnotationSchema = z.object({
+  id: z.string().regex(/^annotation_[0-9]+$/),
+  kind: z.string().regex(/^[a-z][a-z0-9_]*$/),
+  timestampMs: z.number().int().nonnegative().nullable(),
+  frameIds: z.array(vcmrFrameIdSchema).default([]),
+  text: z.string().trim().min(1).max(12000),
+  source: z.enum(["user", "detector", "ai"]),
+});
+
+function validateFrameIdentity(
+  frames: Array<{ id: string; name: string }>,
+  ctx: {
+    addIssue(issue: { code: "custom"; message: string; path: Array<string | number> }): void;
+  },
+) {
+  const ids = new Set<string>();
+  for (let index = 0; index < frames.length; index += 1) {
+    const frame = frames[index];
+    const expected = `frame_${frame.name.slice(0, 6)}`;
+    if (frame.id !== expected) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Frame ID must be derived from frame name",
+        path: ["frames", index, "id"],
+      });
+    }
+    if (ids.has(frame.id)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Frame IDs must be unique",
+        path: ["frames", index, "id"],
+      });
+    }
+    ids.add(frame.id);
+  }
+}
+
+export const vcmrExtractionSchema = z.object({
+  schema: z.literal(VCMR_SCHEMA),
+  schemaVersion: z.literal(VCMR_SCHEMA_VERSION),
+  media: vcmrMediaSchema.extend({
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    durationMs: z.number().int().positive(),
+  }),
+  frames: z.array(vcmrFrameCoreSchema).max(MAX_EXTRACTED_FRAMES),
+  rounds: z.array(vcmrRoundSchema).max(512).default([]),
+  events: z.array(vcmrEventSchema).max(250000).default([]),
+  annotations: z.array(vcmrAnnotationSchema).max(250000).default([]),
+}).superRefine((value, ctx) => validateFrameIdentity(value.frames, ctx));
 
 export const studyCreationSchema = z.object({
   player: playerSettingsSchema,
@@ -163,6 +262,47 @@ export const manifestSchema = z.object({
     ctx.addIssue({ code: "custom", message: "Frame must belong to this Study", path: ["frames"] });
 });
 
+export const vcmrMatchSchema = z.object({
+  schema: z.literal(VCMR_SCHEMA),
+  schemaVersion: z.literal(VCMR_SCHEMA_VERSION),
+  study: z.object({
+    id: studyIdSchema,
+    game: z.literal("valorant"),
+    visibility: z.enum(["private", "public"]),
+    status: processingStatusSchema,
+    createdAt: z.iso.datetime(),
+    completedAt: z.iso.datetime().nullable(),
+  }),
+  player: playerSettingsSchema,
+  media: vcmrMediaSchema,
+  processing: z.object({
+    progress: processingProgressSchema.nullable(),
+    framesExpiredAt: z.iso.datetime().nullable(),
+  }),
+  frames: z.array(vcmrFrameSchema).max(MAX_EXTRACTED_FRAMES),
+  rounds: z.array(vcmrRoundSchema).max(512).default([]),
+  events: z.array(vcmrEventSchema).max(250000).default([]),
+  annotations: z.array(vcmrAnnotationSchema).max(250000).default([]),
+  coaching: z.object({
+    protocol: z.object({
+      redditResearchRequired: z.literal(true),
+      promptTemplateVersion: z.string().min(1),
+    }),
+    prompt: z.string().min(1),
+  }),
+}).superRefine((value, ctx) => {
+  validateFrameIdentity(value.frames, ctx);
+  for (let index = 0; index < value.frames.length; index += 1) {
+    if (!value.frames[index].url.startsWith(`/${value.study.id}/frames/`)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Frame must belong to this Study",
+        path: ["frames", index, "url"],
+      });
+    }
+  }
+});
+
 export const processingJobSchema = z.object({
   studyId: studyIdSchema,
   sourceObjectKey: z.string().regex(/^studies\/[0-9a-f]{11}\/source$/),
@@ -175,3 +315,7 @@ export type ProcessingProgress = z.infer<typeof processingProgressSchema>;
 export type StudyCreation = z.infer<typeof studyCreationSchema>;
 export type ProcessingJob = z.infer<typeof processingJobSchema>;
 export type Manifest = z.infer<typeof manifestSchema>;
+export type VcmrFrame = z.infer<typeof vcmrFrameSchema>;
+export type VcmrMedia = z.infer<typeof vcmrMediaSchema>;
+export type VcmrExtraction = z.infer<typeof vcmrExtractionSchema>;
+export type VcmrMatch = z.infer<typeof vcmrMatchSchema>;
