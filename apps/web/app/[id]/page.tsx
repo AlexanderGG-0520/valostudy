@@ -1,5 +1,4 @@
 import { headers } from "next/headers";
-import { config } from "@valostudy/config";
 import { notFound } from "next/navigation";
 import { auth } from "../../lib/auth";
 import { buildManifest } from "../../lib/studies";
@@ -39,8 +38,6 @@ function phaseState(current: string | undefined, phase: string) {
 
 export default async function StudyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const appConfig = config();
-  const appUrl = appConfig.PUBLIC_APP_URL ?? appConfig.BETTER_AUTH_URL;
   const session = await auth().api.getSession({ headers: await headers() });
   const m = await buildManifest(id, session?.user.id).catch((e: unknown) => {
     if (e instanceof HttpError && e.status === 404) notFound();
@@ -126,7 +123,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     </section>}
 
     {m.status === "completed" && !m.framesExpiredAt && m.frames.length > 0 &&
-      <AiCoachingCard studyId={m.studyId} appUrl={appUrl} />}
+      <AiCoachingCard studyId={m.studyId} />}
 
     {m.status === "completed" && <>
       <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>
