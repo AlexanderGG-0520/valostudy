@@ -1,11 +1,13 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { config } from "@valostudy/config";
 import { auth } from "../../lib/auth";
 import { buildManifest } from "../../lib/studies";
 import { HttpError } from "../../lib/http";
 import { StudyProcessingRefresh } from "../../components/study-processing-refresh";
 import { ProcessingTiming } from "../../components/processing-timing";
 import { FrameGallery } from "../../components/frame-gallery";
+import { AiCoachingPanel } from "../../components/ai-coaching-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +52,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
   const frameProgress = progress?.totalFrames
     ? `${(progress.processedFrames ?? 0).toLocaleString()} / ${progress.totalFrames.toLocaleString()} frames`
     : null;
+  const appOrigin = (config().PUBLIC_APP_URL ?? config().BETTER_AUTH_URL).replace(/\/$/, "");
 
   return <main className="study-page">
     {processing && <StudyProcessingRefresh intervalMs={2000} />}
@@ -122,6 +125,11 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     </section>}
 
     {m.status === "completed" && <>
+      <AiCoachingPanel
+        studyId={id}
+        mcpUrl={`${appOrigin}/mcp`}
+        isPublic={m.visibility === "public"}
+      />
       <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>
       <a className="study-link" href={"/ai/" + id}>AI用の軽量入口を開く <span>→</span></a>
     </>}
