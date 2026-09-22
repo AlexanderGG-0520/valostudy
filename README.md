@@ -206,6 +206,22 @@ VCMR v1 (`valostudy.vcmr@1.0.0`) がStudyの正規表現です。現在のWorker
 
 VCMRとmanifestは内部object keyを含めません。frame routeがowner/public認可後にJPEGを配信します。既存StudyのWebPも後方互換で配信します。元動画をWeb経由で配信するrouteはありません。private取得にはowner cookieが必要です。
 
+### Public MCP
+
+Public Studyはread-only MCP endpoint `/mcp` からも取得できます。MCP `2026-07-28` のstateless lifecycleと、`2025-11-25` initialize handshake fallbackを同じendpointで提供します。
+
+Tools:
+
+- `get_study(study_id)`: player/settings/prompt/protocol/frame countとcanonical resource URL
+- `get_player_settings(study_id)`
+- `get_coaching_prompt(study_id)`
+- `list_frames(study_id, offset?, limit?)`: 最大240件ずつframe metadataを取得
+- `get_frame(study_id, frame_name)`: object storageから画像を読み、MCP image contentとして直接返す
+
+`get_frame` は外部AIにframe URLを再fetchさせないため、Web crawler/search indexの到達性に依存しません。MCP endpointではowner sessionを使用しないためprivate Studyは公開されません。
+
+Example endpoint: `https://valostudy.example.com/mcp`
+
 ## Storage / queue / processing
 
 1. `POST /api/studies` に小さなJSONを送信。Study、設定、prompt snapshot、4時間のmultipart sessionを作成。
