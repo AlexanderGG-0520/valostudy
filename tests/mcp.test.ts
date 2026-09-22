@@ -115,6 +115,15 @@ beforeEach(() => {
     status: "completed",
     framesExpiredAt: null,
     frameCount: 7072,
+    timeline: {
+      origin: "video_start",
+      unit: "ms",
+      durationMs: 1_414_400,
+      samplingFps: 5,
+      samplingIntervalMs: 200,
+      observedStartMs: 0,
+      observedEndMs: 1_414_200,
+    },
     timestampNote: "Sampling timeline",
     coachingProtocol: { redditResearchRequired: true, promptTemplateVersion: "v1" },
     prompt: "Inspect the entire match and coach the player.",
@@ -191,6 +200,15 @@ describe("ValoStudy MCP", () => {
       frame_count: 7072,
       canonical_schema_version: "1.1.0",
       frames_expired_at: null,
+      timeline: {
+        origin: "video_start",
+        unit: "ms",
+        duration_ms: 1_414_400,
+        sampling_fps: 5,
+        sampling_interval_ms: 200,
+        observed_start_ms: 0,
+        observed_end_ms: 1_414_200,
+      },
       manifest_url: `https://valostudy.alec-ofc.com/${id}/manifest.json`,
     });
     expect(body.result.structuredContent.player).toBeUndefined();
