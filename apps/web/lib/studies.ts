@@ -1,6 +1,6 @@
 import {
   db, studies, uploads, jobs, promptTemplates, promptSnapshots, frames, usageEvents, user,
-  eq, asc, and, desc, gte, isNull, sql,
+  eq, asc, and, desc, gte, lte, isNull, sql,
 } from "@valostudy/db";
 import { insertWithStudyId } from "@valostudy/db/id";
 import { template, renderSnapshot } from "@valostudy/prompts";
@@ -212,19 +212,36 @@ export async function buildPublicAiStudyIndex(id: string) {
   };
 }
 
-export async function buildPublicAiFramePage(id: string, offset: number, limit: number) {
+export async function buildPublicAiFramePage(
+  id: string,
+  offset: number,
+  limit: number,
+  startMs?: number,
+  endMs?: number,
+) {
   if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 240)
     throw new HttpError(400, "Invalid frame pagination");
+  if (startMs !== undefined && (!Number.isInteger(startMs) || startMs < 0))
+    throw new HttpError(400, "Invalid start_ms");
+  if (endMs !== undefined && (!Number.isInteger(endMs) || endMs < 0))
+    throw new HttpError(400, "Invalid end_ms");
+  if (startMs !== undefined && endMs !== undefined && endMs < startMs)
+    throw new HttpError(400, "end_ms must be at or after start_ms");
 
   const study = await readableStudy(id);
   if (!study || study.status !== "completed" || study.framesExpiredAt)
     throw new HttpError(404, "Frames not found");
 
+  const predicates = [eq(frames.studyId, id)];
+  if (startMs !== undefined) predicates.push(gte(frames.timestampMs, startMs));
+  if (endMs !== undefined) predicates.push(lte(frames.timestampMs, endMs));
+  const where = and(...predicates);
+
   const [[totalRow], rows] = await Promise.all([
-    db().select({ count: sql<number>`count(*)` }).from(frames).where(eq(frames.studyId, id)),
+    db().select({ count: sql<number>`count(*)` }).from(frames).where(where),
     db().select({ name: frames.name, timestampMs: frames.timestampMs })
       .from(frames)
-      .where(eq(frames.studyId, id))
+      .where(where)
       .orderBy(asc(frames.name))
       .limit(limit)
       .offset(offset),
@@ -233,9 +250,12 @@ export async function buildPublicAiFramePage(id: string, offset: number, limit: 
   return {
     studyId: id,
     total: Number(totalRow?.count ?? 0),
+    rangeStartMs: startMs ?? null,
+    rangeEndMs: endMs ?? null,
     timestampNote: VCMR_TIMESTAMP_SEMANTICS,
     frames: rows.map((frame) => ({
       name: frame.name,
+      sampleIndex: Number.parseInt(frame.name.slice(0, 6), 10) - 1,
       timestampMs: frame.timestampMs,
       url: `/${id}/frames/${frame.name}`,
     })),
