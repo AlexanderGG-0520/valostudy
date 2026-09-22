@@ -11,6 +11,7 @@ This document is the submission checklist for publishing that MCP as part of an 
 - Preferred protocol revision: `2026-07-28`
 - Compatibility fallback: `2025-11-25`
 - Server is stateless and read-only.
+- Every current tool explicitly declares `securitySchemes: [{ type: "noauth" }]`; no ValoStudy account is required to read a public Study.
 - Only public Studies are exposed.
 - Private Studies are not resolved with owner sessions through MCP.
 - POST requests must use `Content-Type: application/json`.
