@@ -75,6 +75,28 @@ it("renders unauthorized Studies as not found", async () => {
   await expect(StudyPage({ params: Promise.resolve({ id }) })).rejects.toThrow("NEXT_NOT_FOUND");
 });
 
+it("does not advertise MCP coaching after frame retention expires", async () => {
+  mocks.buildManifest.mockResolvedValue({
+    ...manifest,
+    framesExpiredAt: "2026-09-22T00:00:00.000Z",
+    frames: [],
+  });
+  const html = renderToStaticMarkup(await StudyPage({ params: Promise.resolve({ id }) }));
+  expect(html).not.toContain("AIで試合をコーチング");
+  expect(html).toContain("フレーム保持期間が終了しました");
+});
+
+it("does not advertise MCP coaching when a completed Study has no frames", async () => {
+  mocks.buildManifest.mockResolvedValue({
+    ...manifest,
+    framesExpiredAt: null,
+    frames: [],
+  });
+  const html = renderToStaticMarkup(await StudyPage({ params: Promise.resolve({ id }) }));
+  expect(html).not.toContain("AIで試合をコーチング");
+  expect(html).toContain("フレーム整合性エラー");
+});
+
 it("renders a public AI entrypoint with player settings, prompt, and machine-readable links", async () => {
   const html = renderToStaticMarkup(await AiStudyPage({ params: Promise.resolve({ id }) }));
   expect(html).toContain("ValoStudy AI Entry Point");
