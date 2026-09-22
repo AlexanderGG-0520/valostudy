@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type AiCoachingCardProps = {
   studyId: string;
-  appUrl: string;
 };
 
 function coachingPrompt(studyId: string) {
@@ -16,13 +15,17 @@ list_frames/get_frame を使って試合全体を広く確認したうえで、
 改善点を具体的に分析してください。`;
 }
 
-export function AiCoachingCard({ studyId, appUrl }: AiCoachingCardProps) {
+export function AiCoachingCard({ studyId }: AiCoachingCardProps) {
   const [setupOpen, setSetupOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [origin, setOrigin] = useState("");
 
-  const baseUrl = appUrl.replace(/\/$/, "");
-  const mcpUrl = `${baseUrl}/mcp`;
-  const studyUrl = `${baseUrl}/${studyId}`;
+  useEffect(() => {
+    setOrigin(window.location.origin.replace(/\/$/, ""));
+  }, []);
+
+  const mcpUrl = origin ? `${origin}/mcp` : "/mcp";
+  const studyUrl = origin ? `${origin}/${studyId}` : `/${studyId}`;
   const prompt = coachingPrompt(studyId);
 
   async function copy(value: string, label: string) {
