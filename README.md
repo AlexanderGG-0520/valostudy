@@ -212,10 +212,10 @@ Public Studyはread-only MCP endpoint `/mcp` からも取得できます。MCP `
 
 Tools:
 
-- `get_study(study_id)`: player/settings/prompt/protocol/frame countとcanonical resource URL
+- `get_study(study_id)`: status/frame count、VCMR version、canonical timeline summary、canonical resource URL
 - `get_player_settings(study_id)`
 - `get_coaching_prompt(study_id)`
-- `list_frames(study_id, offset?, limit?)`: 最大240件ずつframe metadataを取得
+- `list_frames(study_id, offset?, limit?, start_ms?, end_ms?)`: 最大240件ずつframe metadataを取得。canonical timelineの時間範囲で絞り込み可能
 - `get_frame(study_id, frame_name)`: object storageから画像を読み、MCP image contentとして直接返す
 
 `get_frame` は外部AIにframe URLを再fetchさせないため、Web crawler/search indexの到達性に依存しません。MCP endpointではowner sessionを使用しないためprivate Studyは公開されません。
