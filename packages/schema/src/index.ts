@@ -250,6 +250,90 @@ function validateFrameIdentity(
   }
 }
 
+
+function validateTemporalModel(
+  value: {
+    media: { durationMs: number | null; sampling: { fps: number } };
+    timeline: {
+      durationMs: number | null;
+      samplingIntervalMs: number;
+      frameCount: number;
+      observedRange: { startMs: number; endMs: number } | null;
+      coverage: { expectedFrameCount: number | null; observedFrameCount: number; complete: boolean };
+    };
+    frames: Array<{ id: string; timestampMs: number }>;
+    rounds: Array<{ id: string; startMs: number; endMs: number | null; freezeEndMs: number | null; startFrameId: string | null; endFrameId: string | null }>;
+    events: Array<{ timestampMs: number; endTimestampMs: number | null; evidenceFrameIds: string[] }>;
+    annotations: Array<{ timestampMs: number | null; endTimestampMs: number | null; frameIds: string[] }>;
+  },
+  ctx: {
+    addIssue(issue: { code: "custom"; message: string; path: Array<string | number> }): void;
+  },
+) {
+  if (value.timeline.durationMs !== value.media.durationMs) {
+    ctx.addIssue({ code: "custom", message: "Timeline duration must match media duration", path: ["timeline", "durationMs"] });
+  }
+  const expectedInterval = Math.round(1000 / value.media.sampling.fps);
+  if (value.timeline.samplingIntervalMs !== expectedInterval) {
+    ctx.addIssue({ code: "custom", message: "Timeline sampling interval must match media sampling FPS", path: ["timeline", "samplingIntervalMs"] });
+  }
+  if (value.timeline.frameCount !== value.frames.length || value.timeline.coverage.observedFrameCount !== value.frames.length) {
+    ctx.addIssue({ code: "custom", message: "Timeline frame counts must match frames", path: ["timeline", "frameCount"] });
+  }
+  if (
+    value.timeline.coverage.expectedFrameCount !== null
+    && value.timeline.coverage.complete !== (value.timeline.coverage.expectedFrameCount === value.frames.length)
+  ) {
+    ctx.addIssue({ code: "custom", message: "Timeline coverage completeness is inconsistent", path: ["timeline", "coverage", "complete"] });
+  }
+  const first = value.frames[0]?.timestampMs ?? null;
+  const last = value.frames.at(-1)?.timestampMs ?? null;
+  const expectedRange = first === null || last === null ? null : { startMs: first, endMs: last };
+  if (JSON.stringify(value.timeline.observedRange) !== JSON.stringify(expectedRange)) {
+    ctx.addIssue({ code: "custom", message: "Timeline observedRange must match frame timestamps", path: ["timeline", "observedRange"] });
+  }
+
+  const frameIds = new Set(value.frames.map((frame) => frame.id));
+  for (let index = 0; index < value.rounds.length; index += 1) {
+    const round = value.rounds[index];
+    if (round.endMs !== null && round.endMs < round.startMs)
+      ctx.addIssue({ code: "custom", message: "Round endMs must be at or after startMs", path: ["rounds", index, "endMs"] });
+    if (round.freezeEndMs !== null && round.freezeEndMs < round.startMs)
+      ctx.addIssue({ code: "custom", message: "Round freezeEndMs must be at or after startMs", path: ["rounds", index, "freezeEndMs"] });
+    if (round.endMs !== null && round.freezeEndMs !== null && round.freezeEndMs > round.endMs)
+      ctx.addIssue({ code: "custom", message: "Round freezeEndMs must not exceed endMs", path: ["rounds", index, "freezeEndMs"] });
+    for (const [key, frameId] of [["startFrameId", round.startFrameId], ["endFrameId", round.endFrameId]] as const) {
+      if (frameId !== null && !frameIds.has(frameId))
+        ctx.addIssue({ code: "custom", message: "Round frame reference must exist", path: ["rounds", index, key] });
+    }
+  }
+
+  for (let index = 0; index < value.events.length; index += 1) {
+    const event = value.events[index];
+    if (event.endTimestampMs !== null && event.endTimestampMs < event.timestampMs)
+      ctx.addIssue({ code: "custom", message: "Event endTimestampMs must be at or after timestampMs", path: ["events", index, "endTimestampMs"] });
+    for (const frameId of event.evidenceFrameIds) {
+      if (!frameIds.has(frameId))
+        ctx.addIssue({ code: "custom", message: "Event evidence frame reference must exist", path: ["events", index, "evidenceFrameIds"] });
+    }
+  }
+
+  for (let index = 0; index < value.annotations.length; index += 1) {
+    const annotation = value.annotations[index];
+    if (
+      annotation.timestampMs !== null
+      && annotation.endTimestampMs !== null
+      && annotation.endTimestampMs < annotation.timestampMs
+    ) {
+      ctx.addIssue({ code: "custom", message: "Annotation endTimestampMs must be at or after timestampMs", path: ["annotations", index, "endTimestampMs"] });
+    }
+    for (const frameId of annotation.frameIds) {
+      if (!frameIds.has(frameId))
+        ctx.addIssue({ code: "custom", message: "Annotation frame reference must exist", path: ["annotations", index, "frameIds"] });
+    }
+  }
+}
+
 export const vcmrExtractionSchema = z.object({
   schema: z.literal(VCMR_SCHEMA),
   schemaVersion: z.literal(VCMR_SCHEMA_VERSION),
@@ -263,7 +347,10 @@ export const vcmrExtractionSchema = z.object({
   rounds: z.array(vcmrRoundSchema).max(512).default([]),
   events: z.array(vcmrEventSchema).max(250000).default([]),
   annotations: z.array(vcmrAnnotationSchema).max(250000).default([]),
-}).superRefine((value, ctx) => validateFrameIdentity(value.frames, ctx));
+}).superRefine((value, ctx) => {
+  validateFrameIdentity(value.frames, ctx);
+  validateTemporalModel(value, ctx);
+});
 
 export const studyCreationSchema = z.object({
   player: playerSettingsSchema,
@@ -338,15 +425,7 @@ export const vcmrMatchSchema = z.object({
   }),
 }).superRefine((value, ctx) => {
   validateFrameIdentity(value.frames, ctx);
-  if (value.timeline.frameCount !== value.frames.length || value.timeline.coverage.observedFrameCount !== value.frames.length) {
-    ctx.addIssue({ code: "custom", message: "Timeline frame counts must match frames", path: ["timeline", "frameCount"] });
-  }
-  const first = value.frames[0]?.timestampMs ?? null;
-  const last = value.frames.at(-1)?.timestampMs ?? null;
-  const expectedRange = first === null || last === null ? null : { startMs: first, endMs: last };
-  if (JSON.stringify(value.timeline.observedRange) !== JSON.stringify(expectedRange)) {
-    ctx.addIssue({ code: "custom", message: "Timeline observedRange must match frame timestamps", path: ["timeline", "observedRange"] });
-  }
+  validateTemporalModel(value, ctx);
   for (let index = 0; index < value.frames.length; index += 1) {
     if (!value.frames[index].url.startsWith(`/${value.study.id}/frames/`)) {
       ctx.addIssue({
