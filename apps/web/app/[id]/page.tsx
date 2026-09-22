@@ -53,6 +53,8 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
   const frameProgress = progress?.totalFrames
     ? `${(progress.processedFrames ?? 0).toLocaleString()} / ${progress.totalFrames.toLocaleString()} frames`
     : null;
+  const appOrigin = (process.env.PUBLIC_APP_URL ?? process.env.BETTER_AUTH_URL ?? "").replace(/\/$/, "");
+  const mcpUrl = appOrigin ? `${appOrigin}/mcp` : "/mcp";
 
   return <main className="study-page">
     {processing && <StudyProcessingRefresh intervalMs={2000} />}
@@ -127,7 +129,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     {m.status === "completed" && <>
       <AiCoachingPanel
         studyId={id}
-        mcpUrl="/mcp"
+        mcpUrl={mcpUrl}
         isPublic={study.visibility === "public"}
       />
       <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>
