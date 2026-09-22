@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createAuthClient } from "better-auth/react";
 import { PLAN_LIMITS, type Plan } from "@valostudy/schema";
@@ -208,6 +209,7 @@ export function BillingPanel() {
           <ul>
             {copy.features.map((feature) => <li key={feature}>{feature}</li>)}
           </ul>
+          {plan === "pro" && <Link className="pricing-doc-link" href="/docs/api">Bearer API docs →</Link>}
 
           {plan === "free" ? <div className="plan-action-muted">
             {!session
