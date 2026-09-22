@@ -21,7 +21,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: migrate
-          image: ghcr.io/alexandergg-0520/valostudy-worker:65cb0dd76ce366dbf32adf1d458a917ffaa4d234
+          image: ghcr.io/alexandergg-0520/valostudy-worker:78d551dcee3632753f8dc1515ec3a64cc1d6e284
           command:
             - ./node_modules/.bin/tsx
             - packages/db/src/migrate.ts
