@@ -115,6 +115,7 @@ export function ProApiPanel() {
       </Button>
       <code>GET /api/v1/studies</code>
       <code>GET /api/v1/studies/:id/manifest</code>
+      <code>GET /api/v1/studies/:id/canonical</code>
       <code>GET /api/v1/clients</code>
       <code>GET /api/v1/clients/:id/manifest</code>
     </div>
