@@ -143,12 +143,16 @@ it("rejects invalid AI frame index pages", async () => {
   expect(mocks.buildPublicAiFramePage).not.toHaveBeenCalled();
 });
 
-it("explicitly permits ChatGPT search and user-triggered crawlers", () => {
+it("explicitly permits common AI search, user, and crawler agents", () => {
   expect(robots()).toEqual({
     rules: [
       { userAgent: "OAI-SearchBot", allow: "/" },
       { userAgent: "ChatGPT-User", allow: "/" },
-      { userAgent: "GPTBot", disallow: "/" },
+      { userAgent: "GPTBot", allow: "/" },
+      { userAgent: "Google-Extended", allow: "/" },
+      { userAgent: "ClaudeBot", allow: "/" },
+      { userAgent: "Claude-User", allow: "/" },
+      { userAgent: "Claude-SearchBot", allow: "/" },
       { userAgent: "*", allow: "/" },
     ],
   });
