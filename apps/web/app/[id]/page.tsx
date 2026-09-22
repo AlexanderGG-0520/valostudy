@@ -126,12 +126,14 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
       </p>
     </section>}
 
-    {m.status === "completed" && <>
+    {m.status === "completed" && !m.framesExpiredAt && m.frames.length > 0 &&
       <AiCoachingPanel
         studyId={id}
         mcpUrl={mcpUrl}
         isPublic={study.visibility === "public"}
-      />
+      />}
+
+    {m.status === "completed" && <>
       <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>
       <a className="study-link" href={"/ai/" + id}>AI用の軽量入口を開く <span>→</span></a>
     </>}
