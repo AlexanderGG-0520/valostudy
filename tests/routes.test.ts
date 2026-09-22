@@ -4,12 +4,14 @@ import { id, manifest } from "./fixtures";
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   buildManifest: vi.fn(),
+  readableStudy: vi.fn(),
   buildPublicAiStudyIndex: vi.fn(),
   buildPublicAiFramePage: vi.fn(),
 }));
 vi.mock("../apps/web/lib/auth", () => ({ auth: () => ({ api: { getSession: mocks.getSession } }) }));
 vi.mock("../apps/web/lib/studies", () => ({
   buildManifest: mocks.buildManifest,
+  readableStudy: mocks.readableStudy,
   buildPublicAiStudyIndex: mocks.buildPublicAiStudyIndex,
   buildPublicAiFramePage: mocks.buildPublicAiFramePage,
 }));
@@ -26,6 +28,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.getSession.mockResolvedValue(null);
   mocks.buildManifest.mockResolvedValue(manifest);
+  mocks.readableStudy.mockResolvedValue({ visibility: "public" });
   mocks.buildPublicAiStudyIndex.mockResolvedValue({
     studyId: manifest.studyId,
     player: manifest.player,
@@ -61,6 +64,7 @@ it("renders /{id} on the server with escaped user data and correct URLs", async 
   const html = renderToStaticMarkup(await StudyPage({ params: Promise.resolve({ id }) }));
   expect(html).toContain(`/${id}/manifest.json`);
   expect(html).toContain(`/ai/${id}`);
+  expect(html).toContain("AIで試合をコーチング");
   expect(html).toContain(`/${id}/frames/000001.jpg`);
   expect(html).not.toContain("<script>alert(1)</script>");
   expect(html).toContain("&lt;script&gt;");
@@ -69,6 +73,28 @@ it("renders /{id} on the server with escaped user data and correct URLs", async 
 it("renders unauthorized Studies as not found", async () => {
   mocks.buildManifest.mockRejectedValue(new HttpError(404, "Study not found"));
   await expect(StudyPage({ params: Promise.resolve({ id }) })).rejects.toThrow("NEXT_NOT_FOUND");
+});
+
+it("does not advertise MCP coaching after frame retention expires", async () => {
+  mocks.buildManifest.mockResolvedValue({
+    ...manifest,
+    framesExpiredAt: "2026-09-22T00:00:00.000Z",
+    frames: [],
+  });
+  const html = renderToStaticMarkup(await StudyPage({ params: Promise.resolve({ id }) }));
+  expect(html).not.toContain("AIで試合をコーチング");
+  expect(html).toContain("フレーム保持期間が終了しました");
+});
+
+it("does not advertise MCP coaching when a completed Study has no frames", async () => {
+  mocks.buildManifest.mockResolvedValue({
+    ...manifest,
+    framesExpiredAt: null,
+    frames: [],
+  });
+  const html = renderToStaticMarkup(await StudyPage({ params: Promise.resolve({ id }) }));
+  expect(html).not.toContain("AIで試合をコーチング");
+  expect(html).toContain("フレーム整合性エラー");
 });
 
 it("renders a public AI entrypoint with player settings, prompt, and machine-readable links", async () => {

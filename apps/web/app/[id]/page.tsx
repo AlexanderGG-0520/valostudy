@@ -1,11 +1,12 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { auth } from "../../lib/auth";
-import { buildManifest } from "../../lib/studies";
+import { buildManifest, readableStudy } from "../../lib/studies";
 import { HttpError } from "../../lib/http";
 import { StudyProcessingRefresh } from "../../components/study-processing-refresh";
 import { ProcessingTiming } from "../../components/processing-timing";
 import { FrameGallery } from "../../components/frame-gallery";
+import { AiCoachingPanel } from "../../components/ai-coaching-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,8 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     if (e instanceof HttpError && e.status === 404) notFound();
     throw e;
   });
+  const study = await readableStudy(id, session?.user.id);
+  if (!study) notFound();
   const initialFrames = m.frames.slice(0, 120);
   const processing = m.status === "pending" || m.status === "queued" || m.status === "processing";
   const missingCompletedFrames = m.status === "completed" && !m.framesExpiredAt && m.frames.length === 0;
@@ -50,6 +53,8 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
   const frameProgress = progress?.totalFrames
     ? `${(progress.processedFrames ?? 0).toLocaleString()} / ${progress.totalFrames.toLocaleString()} frames`
     : null;
+  const appOrigin = (process.env.PUBLIC_APP_URL ?? process.env.BETTER_AUTH_URL ?? "").replace(/\/$/, "");
+  const mcpUrl = appOrigin ? `${appOrigin}/mcp` : "/mcp";
 
   return <main className="study-page">
     {processing && <StudyProcessingRefresh intervalMs={2000} />}
@@ -120,6 +125,13 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
         新しいStudyとして再アップロードするか、Workerログを確認してください。
       </p>
     </section>}
+
+    {m.status === "completed" && !m.framesExpiredAt && m.frames.length > 0 &&
+      <AiCoachingPanel
+        studyId={id}
+        mcpUrl={mcpUrl}
+        isPublic={study.visibility === "public"}
+      />}
 
     {m.status === "completed" && <>
       <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>
