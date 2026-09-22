@@ -31,6 +31,7 @@ type ToolDefinition = {
   description: string;
   inputSchema: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
+  securitySchemes: readonly { type: "noauth" }[];
   annotations: {
     readOnlyHint: true;
     destructiveHint: false;
@@ -45,6 +46,8 @@ const READ_ONLY = {
   idempotentHint: true,
   openWorldHint: false,
 } as const;
+
+const NO_AUTH = [{ type: "noauth" }] as const;
 
 const STUDY_ID_PROPERTY = {
   type: "string",
@@ -150,6 +153,7 @@ export const MCP_TOOLS: ToolDefinition[] = [
       ],
       additionalProperties: false,
     },
+    securitySchemes: NO_AUTH,
     annotations: READ_ONLY,
   },
   {
@@ -171,6 +175,7 @@ export const MCP_TOOLS: ToolDefinition[] = [
       required: ["study_id", "player"],
       additionalProperties: false,
     },
+    securitySchemes: NO_AUTH,
     annotations: READ_ONLY,
   },
   {
@@ -193,6 +198,7 @@ export const MCP_TOOLS: ToolDefinition[] = [
       required: ["study_id", "coaching_protocol", "prompt"],
       additionalProperties: false,
     },
+    securitySchemes: NO_AUTH,
     annotations: READ_ONLY,
   },
   {
@@ -233,6 +239,7 @@ export const MCP_TOOLS: ToolDefinition[] = [
       required: ["study_id", "total", "offset", "limit", "timestamp_note", "frames"],
       additionalProperties: false,
     },
+    securitySchemes: NO_AUTH,
     annotations: READ_ONLY,
   },
   {
@@ -264,6 +271,7 @@ export const MCP_TOOLS: ToolDefinition[] = [
       required: ["study_id", "frame_name", "timestamp_ms", "mime_type", "url"],
       additionalProperties: false,
     },
+    securitySchemes: NO_AUTH,
     annotations: READ_ONLY,
   },
 ];
