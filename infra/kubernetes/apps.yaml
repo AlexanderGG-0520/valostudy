@@ -28,7 +28,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
       containers:
         - name: web
-          image: ghcr.io/alexandergg-0520/valostudy-web:7cccf746f7591b09fdb75da22ef3afca2d3499c7
+          image: ghcr.io/alexandergg-0520/valostudy-web:766d363b8f3b92debfb0097250a770a95ebbf565
           ports: [{ containerPort: 3000 }]
           envFrom:
             - configMapRef: { name: valostudy-config }
@@ -56,6 +56,8 @@ kind: Deployment
 metadata:
   name: valostudy-worker
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels: { app: valostudy-worker }
@@ -63,16 +65,16 @@ spec:
     metadata:
       labels: { app: valostudy-worker }
     spec:
-      terminationGracePeriodSeconds: 660
+      terminationGracePeriodSeconds: 60
       securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
       containers:
         - name: worker
-          image: ghcr.io/alexandergg-0520/valostudy-worker:7cccf746f7591b09fdb75da22ef3afca2d3499c7
+          image: ghcr.io/alexandergg-0520/valostudy-worker:766d363b8f3b92debfb0097250a770a95ebbf565
           envFrom:
             - configMapRef: { name: valostudy-config }
             - secretRef: { name: valostudy-secrets }
           resources:
-            requests: { cpu: "8", memory: 4Gi, ephemeral-storage: 16Gi }
+            requests: { cpu: "6", memory: 4Gi, ephemeral-storage: 16Gi }
             limits: { cpu: "8", memory: 8Gi, ephemeral-storage: 140Gi }
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
           volumeMounts: [{ name: scratch, mountPath: /tmp }]
