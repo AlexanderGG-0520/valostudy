@@ -132,6 +132,9 @@ export const vcmrFrameIdSchema = z.string().regex(/^frame_[0-9]{6}$/);
 export const vcmrTimeRangeSchema = z.object({
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().nonnegative(),
+}).refine((value) => value.endMs >= value.startMs, {
+  message: "endMs must be at or after startMs",
+  path: ["endMs"],
 });
 
 export const vcmrTimelineSchema = z.object({
@@ -263,7 +266,7 @@ function validateTemporalModel(
     };
     frames: Array<{ id: string; timestampMs: number }>;
     rounds: Array<{ id: string; startMs: number; endMs: number | null; freezeEndMs: number | null; startFrameId: string | null; endFrameId: string | null }>;
-    events: Array<{ timestampMs: number; endTimestampMs: number | null; evidenceFrameIds: string[] }>;
+    events: Array<{ timestampMs: number; endTimestampMs: number | null; roundId: string | null; evidenceFrameIds: string[] }>;
     annotations: Array<{ timestampMs: number | null; endTimestampMs: number | null; frameIds: string[] }>;
   },
   ctx: {
@@ -281,8 +284,9 @@ function validateTemporalModel(
     ctx.addIssue({ code: "custom", message: "Timeline frame counts must match frames", path: ["timeline", "frameCount"] });
   }
   if (
-    value.timeline.coverage.expectedFrameCount !== null
-    && value.timeline.coverage.complete !== (value.timeline.coverage.expectedFrameCount === value.frames.length)
+    value.timeline.coverage.expectedFrameCount === null
+      ? value.timeline.coverage.complete
+      : value.timeline.coverage.complete !== (value.timeline.coverage.expectedFrameCount === value.frames.length)
   ) {
     ctx.addIssue({ code: "custom", message: "Timeline coverage completeness is inconsistent", path: ["timeline", "coverage", "complete"] });
   }
@@ -317,6 +321,8 @@ function validateTemporalModel(
       ctx.addIssue({ code: "custom", message: "Round endMs must not exceed media duration", path: ["rounds", index, "endMs"] });
     if (round.freezeEndMs !== null && round.freezeEndMs < round.startMs)
       ctx.addIssue({ code: "custom", message: "Round freezeEndMs must be at or after startMs", path: ["rounds", index, "freezeEndMs"] });
+    if (durationMs !== null && round.freezeEndMs !== null && round.freezeEndMs > durationMs)
+      ctx.addIssue({ code: "custom", message: "Round freezeEndMs must not exceed media duration", path: ["rounds", index, "freezeEndMs"] });
     if (round.endMs !== null && round.freezeEndMs !== null && round.freezeEndMs > round.endMs)
       ctx.addIssue({ code: "custom", message: "Round freezeEndMs must not exceed endMs", path: ["rounds", index, "freezeEndMs"] });
     for (const [key, frameId] of [["startFrameId", round.startFrameId], ["endFrameId", round.endFrameId]] as const) {
