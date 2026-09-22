@@ -124,13 +124,35 @@ export const processingOptionsSchema = z.object({
 });
 
 export const VCMR_SCHEMA = "valostudy.vcmr" as const;
-export const VCMR_SCHEMA_VERSION = "1.0.0" as const;
+export const VCMR_SCHEMA_VERSION = "1.1.0" as const;
 export const VCMR_TIMESTAMP_SEMANTICS = "Sampling timeline; timestamps are approximate, not original frame PTS." as const;
 
 export const vcmrFrameIdSchema = z.string().regex(/^frame_[0-9]{6}$/);
+
+export const vcmrTimeRangeSchema = z.object({
+  startMs: z.number().int().nonnegative(),
+  endMs: z.number().int().nonnegative(),
+});
+
+export const vcmrTimelineSchema = z.object({
+  origin: z.literal("video_start"),
+  unit: z.literal("ms"),
+  frameOrdering: z.literal("sample_index"),
+  durationMs: z.number().int().positive().nullable(),
+  samplingIntervalMs: z.number().int().positive(),
+  frameCount: z.number().int().nonnegative(),
+  observedRange: vcmrTimeRangeSchema.nullable(),
+  coverage: z.object({
+    expectedFrameCount: z.number().int().nonnegative().nullable(),
+    observedFrameCount: z.number().int().nonnegative(),
+    complete: z.boolean(),
+  }),
+});
+
 export const vcmrFrameCoreSchema = z.object({
   id: vcmrFrameIdSchema,
   name: frameNameSchema,
+  sampleIndex: z.number().int().nonnegative(),
   timestampMs: z.number().int().nonnegative(),
   source: z.object({
     kind: z.literal("fixed_rate_sampling"),
@@ -153,18 +175,24 @@ export const vcmrMediaSchema = z.object({
   }),
 });
 
+export const vcmrRoundIdSchema = z.string().regex(/^round_[0-9]{2,3}$/);
 export const vcmrRoundSchema = z.object({
-  id: z.string().regex(/^round_[0-9]{2,3}$/),
+  id: vcmrRoundIdSchema,
   number: z.number().int().positive(),
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().nonnegative().nullable(),
+  freezeEndMs: z.number().int().nonnegative().nullable().default(null),
+  startFrameId: vcmrFrameIdSchema.nullable().default(null),
+  endFrameId: vcmrFrameIdSchema.nullable().default(null),
 });
 
 export const vcmrEventSchema = z.object({
   id: z.string().regex(/^event_[0-9]+$/),
   type: z.string().regex(/^[a-z][a-z0-9_]*$/),
+  sequence: z.number().int().nonnegative().nullable().default(null),
   timestampMs: z.number().int().nonnegative(),
-  roundId: vcmrRoundSchema.shape.id.nullable(),
+  endTimestampMs: z.number().int().nonnegative().nullable().default(null),
+  roundId: vcmrRoundIdSchema.nullable(),
   confidence: z.number().min(0).max(1).nullable(),
   evidenceFrameIds: z.array(vcmrFrameIdSchema).default([]),
 });
@@ -173,13 +201,14 @@ export const vcmrAnnotationSchema = z.object({
   id: z.string().regex(/^annotation_[0-9]+$/),
   kind: z.string().regex(/^[a-z][a-z0-9_]*$/),
   timestampMs: z.number().int().nonnegative().nullable(),
+  endTimestampMs: z.number().int().nonnegative().nullable().default(null),
   frameIds: z.array(vcmrFrameIdSchema).default([]),
   text: z.string().trim().min(1).max(12000),
   source: z.enum(["user", "detector", "ai"]),
 });
 
 function validateFrameIdentity(
-  frames: Array<{ id: string; name: string }>,
+  frames: Array<{ id: string; name: string; sampleIndex: number; timestampMs: number }>,
   ctx: {
     addIssue(issue: { code: "custom"; message: string; path: Array<string | number> }): void;
   },
@@ -193,6 +222,21 @@ function validateFrameIdentity(
         code: "custom",
         message: "Frame ID must be derived from frame name",
         path: ["frames", index, "id"],
+      });
+    }
+    const expectedSampleIndex = Number.parseInt(frame.name.slice(0, 6), 10) - 1;
+    if (frame.sampleIndex !== expectedSampleIndex) {
+      ctx.addIssue({
+        code: "custom",
+        message: "sampleIndex must be the zero-based index derived from frame name",
+        path: ["frames", index, "sampleIndex"],
+      });
+    }
+    if (index > 0 && frame.timestampMs < frames[index - 1].timestampMs) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Frame timestamps must be monotonic",
+        path: ["frames", index, "timestampMs"],
       });
     }
     if (ids.has(frame.id)) {
@@ -214,6 +258,7 @@ export const vcmrExtractionSchema = z.object({
     height: z.number().int().positive(),
     durationMs: z.number().int().positive(),
   }),
+  timeline: vcmrTimelineSchema,
   frames: z.array(vcmrFrameCoreSchema).max(MAX_EXTRACTED_FRAMES),
   rounds: z.array(vcmrRoundSchema).max(512).default([]),
   events: z.array(vcmrEventSchema).max(250000).default([]),
@@ -279,6 +324,7 @@ export const vcmrMatchSchema = z.object({
     progress: processingProgressSchema.nullable(),
     framesExpiredAt: z.iso.datetime().nullable(),
   }),
+  timeline: vcmrTimelineSchema,
   frames: z.array(vcmrFrameSchema).max(MAX_EXTRACTED_FRAMES),
   rounds: z.array(vcmrRoundSchema).max(512).default([]),
   events: z.array(vcmrEventSchema).max(250000).default([]),
@@ -292,6 +338,15 @@ export const vcmrMatchSchema = z.object({
   }),
 }).superRefine((value, ctx) => {
   validateFrameIdentity(value.frames, ctx);
+  if (value.timeline.frameCount !== value.frames.length || value.timeline.coverage.observedFrameCount !== value.frames.length) {
+    ctx.addIssue({ code: "custom", message: "Timeline frame counts must match frames", path: ["timeline", "frameCount"] });
+  }
+  const first = value.frames[0]?.timestampMs ?? null;
+  const last = value.frames.at(-1)?.timestampMs ?? null;
+  const expectedRange = first === null || last === null ? null : { startMs: first, endMs: last };
+  if (JSON.stringify(value.timeline.observedRange) !== JSON.stringify(expectedRange)) {
+    ctx.addIssue({ code: "custom", message: "Timeline observedRange must match frame timestamps", path: ["timeline", "observedRange"] });
+  }
   for (let index = 0; index < value.frames.length; index += 1) {
     if (!value.frames[index].url.startsWith(`/${value.study.id}/frames/`)) {
       ctx.addIssue({
@@ -317,5 +372,6 @@ export type ProcessingJob = z.infer<typeof processingJobSchema>;
 export type Manifest = z.infer<typeof manifestSchema>;
 export type VcmrFrame = z.infer<typeof vcmrFrameSchema>;
 export type VcmrMedia = z.infer<typeof vcmrMediaSchema>;
+export type VcmrTimeline = z.infer<typeof vcmrTimelineSchema>;
 export type VcmrExtraction = z.infer<typeof vcmrExtractionSchema>;
 export type VcmrMatch = z.infer<typeof vcmrMatchSchema>;
