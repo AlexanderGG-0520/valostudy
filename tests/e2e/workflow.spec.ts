@@ -98,9 +98,20 @@ for (const visibility of ["public", "private"] as const) {
     expect(canonicalResponse.headers()["content-type"]).toContain("application/vnd.valostudy.vcmr+json");
     const canonical = vcmrMatchSchema.parse(await canonicalResponse.json());
     expect(canonical.schema).toBe("valostudy.vcmr");
-    expect(canonical.schemaVersion).toBe("1.0.0");
+    expect(canonical.schemaVersion).toBe("1.1.0");
     expect(canonical.study).toMatchObject({ id, game: "valorant", visibility, status: "completed" });
     expect(canonical.media.sampling.fps).toBe(1);
+    expect(canonical.timeline).toEqual({
+      origin: "video_start",
+      unit: "ms",
+      frameOrdering: "sample_index",
+      durationMs: 3000,
+      samplingIntervalMs: 1000,
+      frameCount: 3,
+      observedRange: { startMs: 0, endMs: 2000 },
+      coverage: { expectedFrameCount: 3, observedFrameCount: 3, complete: true },
+    });
+    expect(canonical.frames.map((frame) => frame.sampleIndex)).toEqual([0, 1, 2]);
     expect(canonical.frames.map((frame) => frame.id)).toEqual([
       "frame_000001",
       "frame_000002",

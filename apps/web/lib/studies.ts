@@ -1,6 +1,6 @@
 import {
   db, studies, uploads, jobs, promptTemplates, promptSnapshots, frames, usageEvents, user,
-  eq, asc, and, desc, gte, isNull, sql,
+  eq, asc, and, desc, gte, lte, isNull, sql,
 } from "@valostudy/db";
 import { insertWithStudyId } from "@valostudy/db/id";
 import { template, renderSnapshot } from "@valostudy/prompts";
@@ -90,6 +90,16 @@ export async function buildCanonicalMatch(id: string, viewerId?: string) {
   ]);
   if (!snapshot) throw new Error("Missing prompt snapshot");
 
+  const durationMs = upload?.metadata?.duration
+    ? Math.round(upload.metadata.duration * 1000)
+    : null;
+  const samplingIntervalMs = Math.round(1000 / study.options.fps);
+  const expectedFrameCount = upload?.metadata?.duration
+    ? Math.ceil(upload.metadata.duration * study.options.fps)
+    : null;
+  const firstTimestampMs = rows[0]?.timestampMs ?? null;
+  const lastTimestampMs = rows.at(-1)?.timestampMs ?? null;
+
   return vcmrMatchSchema.parse({
     schema: VCMR_SCHEMA,
     schemaVersion: VCMR_SCHEMA_VERSION,
@@ -105,9 +115,7 @@ export async function buildCanonicalMatch(id: string, viewerId?: string) {
     media: {
       width: upload?.metadata?.width ?? null,
       height: upload?.metadata?.height ?? null,
-      durationMs: upload?.metadata?.duration
-        ? Math.round(upload.metadata.duration * 1000)
-        : null,
+      durationMs,
       sampling: {
         fps: study.options.fps,
         strategy: "fixed_rate",
@@ -118,9 +126,26 @@ export async function buildCanonicalMatch(id: string, viewerId?: string) {
       progress: job?.progress ?? null,
       framesExpiredAt: study.framesExpiredAt?.toISOString() ?? null,
     },
+    timeline: {
+      origin: "video_start",
+      unit: "ms",
+      frameOrdering: "sample_index",
+      durationMs,
+      samplingIntervalMs,
+      frameCount: rows.length,
+      observedRange: firstTimestampMs === null || lastTimestampMs === null
+        ? null
+        : { startMs: firstTimestampMs, endMs: lastTimestampMs },
+      coverage: {
+        expectedFrameCount,
+        observedFrameCount: rows.length,
+        complete: expectedFrameCount !== null && rows.length === expectedFrameCount,
+      },
+    },
     frames: rows.map((frame) => ({
       id: `frame_${frame.name.slice(0, 6)}`,
       name: frame.name,
+      sampleIndex: Number.parseInt(frame.name.slice(0, 6), 10) - 1,
       timestampMs: frame.timestampMs,
       url: `/${id}/frames/${frame.name}`,
       source: {
@@ -164,20 +189,38 @@ export async function buildPublicAiStudyIndex(id: string) {
   const study = await readableStudy(id);
   if (!study) throw new HttpError(404, "Study not found");
 
-  const [[snapshot], countRows] = await Promise.all([
+  const [[snapshot], [upload], frameStats] = await Promise.all([
     db().select().from(promptSnapshots).where(eq(promptSnapshots.studyId, id)),
+    db().select({ metadata: uploads.metadata }).from(uploads).where(eq(uploads.studyId, id)),
     study.status === "completed" && !study.framesExpiredAt
-      ? db().select({ count: sql<number>`count(*)` }).from(frames).where(eq(frames.studyId, id))
-      : Promise.resolve([{ count: 0 }]),
+      ? db().select({
+          count: sql<number>`count(*)`,
+          firstTimestampMs: sql<number | null>`min(${frames.timestampMs})`,
+          lastTimestampMs: sql<number | null>`max(${frames.timestampMs})`,
+        }).from(frames).where(eq(frames.studyId, id))
+      : Promise.resolve([{ count: 0, firstTimestampMs: null, lastTimestampMs: null }]),
   ]);
   if (!snapshot) throw new Error("Missing prompt snapshot");
+
+  const durationMs = upload?.metadata?.duration
+    ? Math.round(upload.metadata.duration * 1000)
+    : null;
 
   return {
     studyId: id,
     player: study.player,
     status: study.status,
     framesExpiredAt: study.framesExpiredAt?.toISOString() ?? null,
-    frameCount: Number(countRows[0]?.count ?? 0),
+    frameCount: Number(frameStats[0]?.count ?? 0),
+    timeline: {
+      origin: "video_start" as const,
+      unit: "ms" as const,
+      durationMs,
+      samplingFps: study.options.fps,
+      samplingIntervalMs: Math.round(1000 / study.options.fps),
+      observedStartMs: frameStats[0]?.firstTimestampMs ?? null,
+      observedEndMs: frameStats[0]?.lastTimestampMs ?? null,
+    },
     timestampNote: VCMR_TIMESTAMP_SEMANTICS,
     coachingProtocol: {
       redditResearchRequired: true,
@@ -187,19 +230,36 @@ export async function buildPublicAiStudyIndex(id: string) {
   };
 }
 
-export async function buildPublicAiFramePage(id: string, offset: number, limit: number) {
+export async function buildPublicAiFramePage(
+  id: string,
+  offset: number,
+  limit: number,
+  startMs?: number,
+  endMs?: number,
+) {
   if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 240)
     throw new HttpError(400, "Invalid frame pagination");
+  if (startMs !== undefined && (!Number.isInteger(startMs) || startMs < 0))
+    throw new HttpError(400, "Invalid start_ms");
+  if (endMs !== undefined && (!Number.isInteger(endMs) || endMs < 0))
+    throw new HttpError(400, "Invalid end_ms");
+  if (startMs !== undefined && endMs !== undefined && endMs < startMs)
+    throw new HttpError(400, "end_ms must be at or after start_ms");
 
   const study = await readableStudy(id);
   if (!study || study.status !== "completed" || study.framesExpiredAt)
     throw new HttpError(404, "Frames not found");
 
+  const predicates = [eq(frames.studyId, id)];
+  if (startMs !== undefined) predicates.push(gte(frames.timestampMs, startMs));
+  if (endMs !== undefined) predicates.push(lte(frames.timestampMs, endMs));
+  const where = and(...predicates);
+
   const [[totalRow], rows] = await Promise.all([
-    db().select({ count: sql<number>`count(*)` }).from(frames).where(eq(frames.studyId, id)),
+    db().select({ count: sql<number>`count(*)` }).from(frames).where(where),
     db().select({ name: frames.name, timestampMs: frames.timestampMs })
       .from(frames)
-      .where(eq(frames.studyId, id))
+      .where(where)
       .orderBy(asc(frames.name))
       .limit(limit)
       .offset(offset),
@@ -208,9 +268,12 @@ export async function buildPublicAiFramePage(id: string, offset: number, limit: 
   return {
     studyId: id,
     total: Number(totalRow?.count ?? 0),
+    rangeStartMs: startMs ?? null,
+    rangeEndMs: endMs ?? null,
     timestampNote: VCMR_TIMESTAMP_SEMANTICS,
     frames: rows.map((frame) => ({
       name: frame.name,
+      sampleIndex: Number.parseInt(frame.name.slice(0, 6), 10) - 1,
       timestampMs: frame.timestampMs,
       url: `/${id}/frames/${frame.name}`,
     })),

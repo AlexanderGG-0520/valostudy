@@ -29,7 +29,7 @@ it("probes and extracts the entire real video into full-resolution 4:4:4 JPEG fr
     expect(progress.at(-1)).toBe(100);
     expect(progress).toEqual([...progress].sort((a, b) => a - b));
     expect(result.schema).toBe("valostudy.vcmr");
-    expect(result.schemaVersion).toBe("1.0.0");
+    expect(result.schemaVersion).toBe("1.1.0");
     expect(result.media).toEqual({
       width: 320,
       height: 240,
@@ -40,6 +40,16 @@ it("probes and extracts the entire real video into full-resolution 4:4:4 JPEG fr
         timestampSemantics: "Sampling timeline; timestamps are approximate, not original frame PTS.",
       },
     });
+    expect(result.timeline).toEqual({
+      origin: "video_start",
+      unit: "ms",
+      frameOrdering: "sample_index",
+      durationMs: 3000,
+      samplingIntervalMs: 500,
+      frameCount: 6,
+      observedRange: { startMs: 0, endMs: 2500 },
+      coverage: { expectedFrameCount: 6, observedFrameCount: 6, complete: true },
+    });
     expect(result.rounds).toEqual([]);
     expect(result.events).toEqual([]);
     expect(result.annotations).toEqual([]);
@@ -47,6 +57,7 @@ it("probes and extracts the entire real video into full-resolution 4:4:4 JPEG fr
     expect(result.frames[0]).toMatchObject({
       id: "frame_000001",
       name: "000001.jpg",
+      sampleIndex: 0,
       source: { kind: "fixed_rate_sampling", approximateTimestamp: true },
     });
     const firstFrame = join(output, result.frames[0].name);

@@ -115,6 +115,15 @@ beforeEach(() => {
     status: "completed",
     framesExpiredAt: null,
     frameCount: 7072,
+    timeline: {
+      origin: "video_start",
+      unit: "ms",
+      durationMs: 1_414_400,
+      samplingFps: 5,
+      samplingIntervalMs: 200,
+      observedStartMs: 0,
+      observedEndMs: 1_414_200,
+    },
     timestampNote: "Sampling timeline",
     coachingProtocol: { redditResearchRequired: true, promptTemplateVersion: "v1" },
     prompt: "Inspect the entire match and coach the player.",
@@ -122,10 +131,12 @@ beforeEach(() => {
   mocks.buildPublicAiFramePage.mockResolvedValue({
     studyId: id,
     total: 7072,
+    rangeStartMs: null,
+    rangeEndMs: null,
     timestampNote: "Sampling timeline",
     frames: [
-      { name: "000001.jpg", timestampMs: 0, url: `/${id}/frames/000001.jpg` },
-      { name: "000002.jpg", timestampMs: 200, url: `/${id}/frames/000002.jpg` },
+      { name: "000001.jpg", sampleIndex: 0, timestampMs: 0, url: `/${id}/frames/000001.jpg` },
+      { name: "000002.jpg", sampleIndex: 1, timestampMs: 200, url: `/${id}/frames/000002.jpg` },
     ],
   });
 });
@@ -141,7 +152,7 @@ describe("ValoStudy MCP", () => {
     expect(body.result.resultType).toBe("complete");
     expect(body.result._meta["io.modelcontextprotocol/serverInfo"]).toEqual({
       name: "valostudy",
-      version: "1.1.0",
+      version: "1.2.0",
     });
   });
 
@@ -187,7 +198,17 @@ describe("ValoStudy MCP", () => {
       study_id: id,
       status: "completed",
       frame_count: 7072,
+      canonical_schema_version: "1.1.0",
       frames_expired_at: null,
+      timeline: {
+        origin: "video_start",
+        unit: "ms",
+        duration_ms: 1_414_400,
+        sampling_fps: 5,
+        sampling_interval_ms: 200,
+        observed_start_ms: 0,
+        observed_end_ms: 1_414_200,
+      },
       manifest_url: `https://valostudy.alec-ofc.com/${id}/manifest.json`,
     });
     expect(body.result.structuredContent.player).toBeUndefined();
@@ -225,10 +246,36 @@ describe("ValoStudy MCP", () => {
     const body = await response.json();
     expect(body.result.structuredContent.frames[0]).toEqual({
       frame_name: "000001.jpg",
+      sample_index: 0,
       timestamp_ms: 0,
       url: `https://valostudy.alec-ofc.com/${id}/frames/000001.jpg`,
     });
-    expect(mocks.buildPublicAiFramePage).toHaveBeenCalledWith(id, 240, 2);
+    expect(mocks.buildPublicAiFramePage).toHaveBeenCalledWith(id, 240, 2, undefined, undefined);
+  });
+
+  it("filters frame metadata by canonical timeline range", async () => {
+    mocks.buildPublicAiFramePage.mockResolvedValueOnce({
+      studyId: id,
+      total: 2,
+      rangeStartMs: 60_000,
+      rangeEndMs: 90_000,
+      timestampNote: "Sampling timeline",
+      frames: [
+        { name: "000301.jpg", sampleIndex: 300, timestampMs: 60_000, url: `/${id}/frames/000301.jpg` },
+      ],
+    });
+    const response = await handleMcpRequest(modernRequest(
+      "tools/call",
+      { name: "list_frames", arguments: { study_id: id, start_ms: 60_000, end_ms: 90_000, limit: 120 } },
+      "list_frames",
+    ));
+    const body = await response.json();
+    expect(body.result.structuredContent).toMatchObject({
+      range_start_ms: 60_000,
+      range_end_ms: 90_000,
+      frames: [{ frame_name: "000301.jpg", sample_index: 300, timestamp_ms: 60_000 }],
+    });
+    expect(mocks.buildPublicAiFramePage).toHaveBeenCalledWith(id, 0, 120, 60_000, 90_000);
   });
 
   it("returns JPEG bytes as MCP image content and never uses the bind origin", async () => {
@@ -251,6 +298,7 @@ describe("ValoStudy MCP", () => {
     expect(JSON.parse(body.result.content[1].text)).toEqual({
       study_id: id,
       frame_name: "003000.jpg",
+      sample_index: 2999,
       timestamp_ms: 599800,
       mime_type: "image/jpeg",
       url: `https://valostudy.alec-ofc.com/${id}/frames/003000.jpg`,
@@ -276,6 +324,7 @@ describe("ValoStudy MCP", () => {
     expect(JSON.parse(body.result.content[1].text)).toMatchObject({
       study_id: id,
       frame_name: "003001.webp",
+      sample_index: 3000,
       timestamp_ms: 600000,
       mime_type: "image/webp",
     });
@@ -299,7 +348,7 @@ describe("ValoStudy MCP", () => {
     const response = await handleMcpRequest(request);
     const body = await response.json();
     expect(body.result.protocolVersion).toBe("2025-11-25");
-    expect(body.result.serverInfo).toEqual({ name: "valostudy", version: "1.1.0" });
+    expect(body.result.serverInfo).toEqual({ name: "valostudy", version: "1.2.0" });
     expect(body.result.capabilities).toEqual({ tools: { listChanged: false } });
   });
 

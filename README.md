@@ -202,7 +202,7 @@ Study IDは `crypto.randomBytes(6)` から作る11文字lowercase hex（44bit）
 
 The AI entry point is intentionally lightweight, server-rendered HTML for public Studies. It exposes player settings, the coaching protocol/prompt, frame count, and links to the canonical/manifest documents. Frame evidence is split into HTML index pages of at most 240 links so crawlers and AI assistants can traverse large Studies without requiring one enormous HTML document. Private Studies return 404 from the AI routes because they are resolved without an owner session.
 
-VCMR v1 (`valostudy.vcmr@1.0.0`) がStudyの正規表現です。現在のWorkerはmedia metadataとfixed-rate sampled frame evidenceをVCMRへ正規化し、PostgreSQL/object storageへ分割して永続化します。Web/APIはその正規化データからVCMR documentを決定的に組み立てます。既存manifestはVCMRから生成する互換projectionとして維持します。詳細は `docs/vcmr-v1.md` を参照してください。
+VCMR v1.1 (`valostudy.vcmr@1.1.0`) がStudyの正規表現です。現在のWorkerはmedia metadataとfixed-rate sampled frame evidenceをVCMRへ正規化し、`video_start` 基準のcanonical timeline、sampling interval、observed range、coverage、各frameの`sampleIndex`を付与したうえでPostgreSQL/object storageへ分割して永続化します。Web/APIはその正規化データからVCMR documentを決定的に組み立てます。既存manifestはVCMRから生成する互換projectionとして維持します。詳細は `docs/vcmr-v1.md` を参照してください。
 
 VCMRとmanifestは内部object keyを含めません。frame routeがowner/public認可後にJPEGを配信します。既存StudyのWebPも後方互換で配信します。元動画をWeb経由で配信するrouteはありません。private取得にはowner cookieが必要です。
 
@@ -212,10 +212,10 @@ Public Studyはread-only MCP endpoint `/mcp` からも取得できます。MCP `
 
 Tools:
 
-- `get_study(study_id)`: player/settings/prompt/protocol/frame countとcanonical resource URL
+- `get_study(study_id)`: status/frame count、VCMR version、canonical timeline summary、canonical resource URL
 - `get_player_settings(study_id)`
 - `get_coaching_prompt(study_id)`
-- `list_frames(study_id, offset?, limit?)`: 最大240件ずつframe metadataを取得
+- `list_frames(study_id, offset?, limit?, start_ms?, end_ms?)`: 最大240件ずつframe metadataを取得。canonical timelineの時間範囲で絞り込み可能
 - `get_frame(study_id, frame_name)`: object storageから画像を読み、MCP image contentとして直接返す
 
 `get_frame` は外部AIにframe URLを再fetchさせないため、Web crawler/search indexの到達性に依存しません。MCP endpointではowner sessionを使用しないためprivate Studyは公開されません。

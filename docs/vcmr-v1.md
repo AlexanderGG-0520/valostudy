@@ -1,4 +1,4 @@
-# VCMR v1 — ValoStudy Canonical Match Representation
+# VCMR v1.1 — ValoStudy Canonical Match Representation
 
 VCMR is ValoStudy's model-independent representation of a VALORANT Study.
 
@@ -9,8 +9,8 @@ specific model vendor.
 ## Contract identity
 
 - Schema: `valostudy.vcmr`
-- Version: `1.0.0`
-- Media type: `application/vnd.valostudy.vcmr+json; version=1.0.0`
+- Version: `1.1.0`
+- Media type: `application/vnd.valostudy.vcmr+json; version=1.1.0`
 
 Schema versions follow semantic-versioning rules:
 
@@ -29,7 +29,9 @@ VCMR v1 contains the data ValoStudy can currently produce reliably:
 - player rank, sensitivity, video settings, and user coaching context
 - probed media width, height, and duration when available
 - fixed-rate sampling configuration and timestamp semantics
-- sampled frame evidence with stable IDs, timestamps, URLs, and provenance
+- an explicit canonical timeline rooted at `video_start`
+- deterministic sampling interval, frame ordering, observed time range, and evidence coverage
+- sampled frame evidence with stable IDs, zero-based `sampleIndex`, timestamps, URLs, and provenance
 - processing progress and frame-retention state
 - immutable coaching prompt snapshot and protocol version
 
@@ -37,6 +39,12 @@ The schema also reserves `rounds`, `events`, and `annotations` as typed,
 versioned semantic layers. They are empty in the current extractor rather than
 being guessed from video. Future OCR/CV/VLM/replay detectors can populate them
 without replacing the representation.
+
+VCMR 1.1 makes those semantic layers explicitly temporal. Rounds can reference
+their start/end evidence frames and freeze-end time, events can represent either
+an instant or a span through `timestampMs` / `endTimestampMs`, and annotations
+can cover a time span as well as one or more evidence frames. Schema validation
+rejects inverted spans and references to nonexistent frame IDs.
 
 ## Data flow
 
@@ -87,6 +95,53 @@ object-store keys are never exposed in VCMR.
 
 Timestamps describe the fixed-rate sampling timeline and are approximate rather
 than original packet/frame PTS. That semantic is part of the schema contract.
+
+## Canonical timeline
+
+`timeline` is the common temporal coordinate system for every VCMR layer:
+
+```json
+{
+  "origin": "video_start",
+  "unit": "ms",
+  "frameOrdering": "sample_index",
+  "durationMs": 7142000,
+  "samplingIntervalMs": 1000,
+  "frameCount": 7142,
+  "observedRange": { "startMs": 0, "endMs": 7141000 },
+  "coverage": {
+    "expectedFrameCount": 7142,
+    "observedFrameCount": 7142,
+    "complete": true
+  }
+}
+```
+
+The timeline deliberately distinguishes **media duration** from **observed
+evidence range**. The final sampled frame normally occurs before the exact video
+end, so `observedRange.endMs` must not be treated as media duration.
+
+Every sampled frame has a zero-based `sampleIndex` derived from its stable
+filename. For example, `000123.jpg` is `frame_000123` with
+`sampleIndex = 122`. For fixed-rate sampling, consumers can seek by time using
+the global `samplingIntervalMs` without storing redundant previous/next links
+on every frame.
+
+`coverage.complete` describes whether the currently available canonical frame
+evidence count equals the expected fixed-rate sample count. It may be false for
+processing Studies, expired evidence, or an incomplete extraction. It does not
+claim that semantic detectors such as round or kill detection are complete.
+
+### Temporal semantic layers
+
+- `rounds[]`: `startMs`, optional `endMs`, optional `freezeEndMs`, and
+  optional `startFrameId` / `endFrameId`.
+- `events[]`: stable sequence metadata, `timestampMs`, optional
+  `endTimestampMs`, optional round association, confidence, and evidence frames.
+- `annotations[]`: optional start/end time plus evidence frame references.
+
+The current fixed-rate extractor does **not** invent these gameplay semantics.
+They remain empty until a detector can produce them with defensible evidence.
 
 ## Extension rule
 
