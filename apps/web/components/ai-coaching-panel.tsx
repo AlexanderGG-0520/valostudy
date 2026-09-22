@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "./ui/button";
 import styles from "./ai-coaching-panel.module.css";
 
@@ -13,11 +13,6 @@ type AiCoachingPanelProps = {
 export function AiCoachingPanel({ studyId, mcpUrl, isPublic }: AiCoachingPanelProps) {
   const [setupOpen, setSetupOpen] = useState(false);
   const [copied, setCopied] = useState<"mcp" | "prompt" | "error" | null>(null);
-  const [resolvedMcpUrl, setResolvedMcpUrl] = useState(mcpUrl);
-
-  useEffect(() => {
-    setResolvedMcpUrl(new URL(mcpUrl, window.location.origin).toString());
-  }, [mcpUrl]);
 
   const coachingPrompt = [
     `${studyId} をコーチングして。`,
@@ -69,12 +64,12 @@ export function AiCoachingPanel({ studyId, mcpUrl, isPublic }: AiCoachingPanelPr
               <li>ValoStudyのツールが表示されたら接続完了です。</li>
             </ol>
             <div className={styles.copyRow}>
-              <code>{resolvedMcpUrl}</code>
+              <code>{mcpUrl}</code>
               <Button
                 type="button"
                 className="secondary-button"
                 variant="outline"
-                onClick={() => void copy(resolvedMcpUrl, "mcp")}
+                onClick={() => void copy(mcpUrl, "mcp")}
               >
                 {copied === "mcp" ? "コピー済み" : "MCP URLをコピー"}
               </Button>
