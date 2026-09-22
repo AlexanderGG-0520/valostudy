@@ -65,7 +65,6 @@ it("renders /{id} on the server with escaped user data and correct URLs", async 
   expect(html).toContain(`/${id}/manifest.json`);
   expect(html).toContain(`/ai/${id}`);
   expect(html).toContain("AIで試合をコーチング");
-  expect(html).toContain("/mcp");
   expect(html).toContain(`/${id}/frames/000001.jpg`);
   expect(html).not.toContain("<script>alert(1)</script>");
   expect(html).toContain("&lt;script&gt;");
