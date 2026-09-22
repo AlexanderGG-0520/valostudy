@@ -2167,3 +2167,19 @@ input[type="file"]::file-selector-button {
     justify-content: center;
   }
 }
+
+
+.pricing-doc-link {
+  display: inline-flex;
+  align-self: flex-start;
+  margin: -7px 0 18px;
+  color: var(--olive-dark);
+  font-size: 0.76rem;
+  font-weight: 780;
+  text-decoration: none;
+}
+
+.pricing-doc-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
