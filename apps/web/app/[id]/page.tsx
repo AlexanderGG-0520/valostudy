@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { config } from "@valostudy/config";
 import { auth } from "../../lib/auth";
-import { buildManifest } from "../../lib/studies";
+import { buildManifest, readableStudy } from "../../lib/studies";
 import { HttpError } from "../../lib/http";
 import { StudyProcessingRefresh } from "../../components/study-processing-refresh";
 import { ProcessingTiming } from "../../components/processing-timing";
@@ -44,6 +44,8 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     if (e instanceof HttpError && e.status === 404) notFound();
     throw e;
   });
+  const study = await readableStudy(id, session?.user.id);
+  if (!study) notFound();
   const initialFrames = m.frames.slice(0, 120);
   const processing = m.status === "pending" || m.status === "queued" || m.status === "processing";
   const missingCompletedFrames = m.status === "completed" && !m.framesExpiredAt && m.frames.length === 0;
@@ -52,7 +54,8 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
   const frameProgress = progress?.totalFrames
     ? `${(progress.processedFrames ?? 0).toLocaleString()} / ${progress.totalFrames.toLocaleString()} frames`
     : null;
-  const appOrigin = (config().PUBLIC_APP_URL ?? config().BETTER_AUTH_URL).replace(/\/$/, "");
+  const appConfig = config();
+  const appOrigin = (appConfig.PUBLIC_APP_URL ?? appConfig.BETTER_AUTH_URL).replace(/\/$/, "");
 
   return <main className="study-page">
     {processing && <StudyProcessingRefresh intervalMs={2000} />}
@@ -128,7 +131,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
       <AiCoachingPanel
         studyId={id}
         mcpUrl={`${appOrigin}/mcp`}
-        isPublic={m.visibility === "public"}
+        isPublic={study.visibility === "public"}
       />
       <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>
       <a className="study-link" href={"/ai/" + id}>AI用の軽量入口を開く <span>→</span></a>
