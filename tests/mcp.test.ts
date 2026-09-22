@@ -30,10 +30,35 @@ vi.mock("@valostudy/storage", () => ({
 }));
 
 vi.mock("@valostudy/config", () => ({
+  config: () => ({
+    BETTER_AUTH_URL: "https://auth.internal.test",
+    PUBLIC_APP_URL: "https://valostudy.alec-ofc.com",
+  }),
   log: mocks.log,
 }));
 
 import { handleMcpRequest, MCP_TOOLS } from "../apps/web/lib/mcp";
+
+function mockFrame(name: string, timestampMs: number, bytes: number[]) {
+  mocks.readableStudy.mockResolvedValue({
+    status: "completed",
+    framesExpiredAt: null,
+  });
+  const where = vi.fn().mockResolvedValue([{
+    studyId: id,
+    name,
+    timestampMs,
+    objectKey: `frames/${id}/${name}`,
+  }]);
+  const from = vi.fn(() => ({ where }));
+  const select = vi.fn(() => ({ from }));
+  mocks.db.mockReturnValue({ select });
+  mocks.storageGet.mockResolvedValue({
+    Body: {
+      transformToByteArray: vi.fn().mockResolvedValue(Uint8Array.from(bytes)),
+    },
+  });
+}
 
 function modernRequest(
   method: string,
@@ -41,7 +66,7 @@ function modernRequest(
   name?: string,
   options: { capabilities?: unknown; contentType?: string } = {},
 ) {
-  return new Request("https://valostudy.example.com/mcp", {
+  return new Request("https://0.0.0.0:3000/mcp", {
     method: "POST",
     headers: {
       "content-type": options.contentType ?? "application/json",
@@ -113,6 +138,7 @@ describe("ValoStudy MCP", () => {
     expect(body.result.supportedVersions).toEqual(["2026-07-28"]);
     expect(body.result.capabilities).toEqual({ tools: {} });
     expect(body.result.cacheScope).toBe("public");
+    expect(body.result.resultType).toBe("complete");
     expect(body.result._meta["io.modelcontextprotocol/serverInfo"]).toEqual({
       name: "valostudy",
       version: "1.1.0",
@@ -140,7 +166,11 @@ describe("ValoStudy MCP", () => {
         openWorldHint: false,
       });
       expect(tool.inputSchema.additionalProperties).toBe(false);
-      expect(tool.outputSchema?.additionalProperties).toBe(false);
+      if (tool.name === "get_frame") {
+        expect(tool.outputSchema).toBeUndefined();
+      } else {
+        expect(tool.outputSchema?.additionalProperties).toBe(false);
+      }
     }
   });
 
@@ -158,7 +188,7 @@ describe("ValoStudy MCP", () => {
       status: "completed",
       frame_count: 7072,
       frames_expired_at: null,
-      manifest_url: `https://valostudy.example.com/${id}/manifest.json`,
+      manifest_url: `https://valostudy.alec-ofc.com/${id}/manifest.json`,
     });
     expect(body.result.structuredContent.player).toBeUndefined();
     expect(body.result.structuredContent.prompt).toBeUndefined();
@@ -196,13 +226,63 @@ describe("ValoStudy MCP", () => {
     expect(body.result.structuredContent.frames[0]).toEqual({
       frame_name: "000001.jpg",
       timestamp_ms: 0,
-      url: `https://valostudy.example.com/${id}/frames/000001.jpg`,
+      url: `https://valostudy.alec-ofc.com/${id}/frames/000001.jpg`,
     });
     expect(mocks.buildPublicAiFramePage).toHaveBeenCalledWith(id, 240, 2);
   });
 
+  it("returns JPEG bytes as MCP image content and never uses the bind origin", async () => {
+    mockFrame("003000.jpg", 599800, [0xff, 0xd8, 0xff, 0xd9]);
+
+    const response = await handleMcpRequest(modernRequest(
+      "tools/call",
+      { name: "get_frame", arguments: { study_id: id, frame_name: "003000.jpg" } },
+      "get_frame",
+    ));
+    const body = await response.json();
+
+    expect(body.result.resultType).toBe("complete");
+    expect(body.result.structuredContent).toBeUndefined();
+    expect(body.result.content[0]).toEqual({
+      type: "image",
+      data: Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64"),
+      mimeType: "image/jpeg",
+    });
+    expect(JSON.parse(body.result.content[1].text)).toEqual({
+      study_id: id,
+      frame_name: "003000.jpg",
+      timestamp_ms: 599800,
+      mime_type: "image/jpeg",
+      url: `https://valostudy.alec-ofc.com/${id}/frames/003000.jpg`,
+    });
+    expect(body.result.content[1].text).not.toContain("0.0.0.0");
+  });
+
+  it("returns WebP bytes as MCP image content", async () => {
+    mockFrame("003001.webp", 600000, [0x52, 0x49, 0x46, 0x46]);
+
+    const response = await handleMcpRequest(modernRequest(
+      "tools/call",
+      { name: "get_frame", arguments: { study_id: id, frame_name: "003001.webp" } },
+      "get_frame",
+    ));
+    const body = await response.json();
+
+    expect(body.result.content[0]).toEqual({
+      type: "image",
+      data: Buffer.from([0x52, 0x49, 0x46, 0x46]).toString("base64"),
+      mimeType: "image/webp",
+    });
+    expect(JSON.parse(body.result.content[1].text)).toMatchObject({
+      study_id: id,
+      frame_name: "003001.webp",
+      timestamp_ms: 600000,
+      mime_type: "image/webp",
+    });
+  });
+
   it("supports the 2025 initialize handshake as a compatibility fallback", async () => {
-    const request = new Request("https://valostudy.example.com/mcp", {
+    const request = new Request("https://0.0.0.0:3000/mcp", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -245,7 +325,7 @@ describe("ValoStudy MCP", () => {
   });
 
   it("rejects non-JSON POSTs before parsing", async () => {
-    const request = new Request("https://valostudy.example.com/mcp", {
+    const request = new Request("https://0.0.0.0:3000/mcp", {
       method: "POST",
       headers: { "content-type": "text/plain" },
       body: "{}",
