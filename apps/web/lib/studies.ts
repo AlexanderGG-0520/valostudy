@@ -90,6 +90,16 @@ export async function buildCanonicalMatch(id: string, viewerId?: string) {
   ]);
   if (!snapshot) throw new Error("Missing prompt snapshot");
 
+  const durationMs = upload?.metadata?.duration
+    ? Math.round(upload.metadata.duration * 1000)
+    : null;
+  const samplingIntervalMs = Math.round(1000 / study.options.fps);
+  const expectedFrameCount = upload?.metadata?.duration
+    ? Math.ceil(upload.metadata.duration * study.options.fps)
+    : null;
+  const firstTimestampMs = rows[0]?.timestampMs ?? null;
+  const lastTimestampMs = rows.at(-1)?.timestampMs ?? null;
+
   return vcmrMatchSchema.parse({
     schema: VCMR_SCHEMA,
     schemaVersion: VCMR_SCHEMA_VERSION,
@@ -105,9 +115,7 @@ export async function buildCanonicalMatch(id: string, viewerId?: string) {
     media: {
       width: upload?.metadata?.width ?? null,
       height: upload?.metadata?.height ?? null,
-      durationMs: upload?.metadata?.duration
-        ? Math.round(upload.metadata.duration * 1000)
-        : null,
+      durationMs,
       sampling: {
         fps: study.options.fps,
         strategy: "fixed_rate",
@@ -118,9 +126,26 @@ export async function buildCanonicalMatch(id: string, viewerId?: string) {
       progress: job?.progress ?? null,
       framesExpiredAt: study.framesExpiredAt?.toISOString() ?? null,
     },
+    timeline: {
+      origin: "video_start",
+      unit: "ms",
+      frameOrdering: "sample_index",
+      durationMs,
+      samplingIntervalMs,
+      frameCount: rows.length,
+      observedRange: firstTimestampMs === null || lastTimestampMs === null
+        ? null
+        : { startMs: firstTimestampMs, endMs: lastTimestampMs },
+      coverage: {
+        expectedFrameCount,
+        observedFrameCount: rows.length,
+        complete: expectedFrameCount !== null && rows.length === expectedFrameCount,
+      },
+    },
     frames: rows.map((frame) => ({
       id: `frame_${frame.name.slice(0, 6)}`,
       name: frame.name,
+      sampleIndex: Number.parseInt(frame.name.slice(0, 6), 10) - 1,
       timestampMs: frame.timestampMs,
       url: `/${id}/frames/${frame.name}`,
       source: {
