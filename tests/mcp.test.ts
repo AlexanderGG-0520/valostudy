@@ -1,0 +1,189 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const id = "31f4c1b8ed3";
+const mocks = vi.hoisted(() => ({
+  buildPublicAiStudyIndex: vi.fn(),
+  buildPublicAiFramePage: vi.fn(),
+  readableStudy: vi.fn(),
+  db: vi.fn(),
+  storageGet: vi.fn(),
+}));
+
+vi.mock("../apps/web/lib/studies", () => ({
+  buildPublicAiStudyIndex: mocks.buildPublicAiStudyIndex,
+  buildPublicAiFramePage: mocks.buildPublicAiFramePage,
+  readableStudy: mocks.readableStudy,
+}));
+
+vi.mock("@valostudy/db", () => ({
+  and: vi.fn((...args: unknown[]) => args),
+  eq: vi.fn((...args: unknown[]) => args),
+  frames: { studyId: "studyId", name: "name" },
+  db: mocks.db,
+}));
+
+vi.mock("@valostudy/storage", () => ({
+  Storage: class {
+    get = mocks.storageGet;
+  },
+}));
+
+import { handleMcpRequest, MCP_TOOLS } from "../apps/web/lib/mcp";
+
+function modernRequest(method: string, params: Record<string, unknown> = {}, name?: string) {
+  return new Request("https://valostudy.example.com/mcp", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "accept": "application/json, text/event-stream",
+      "mcp-protocol-version": "2026-07-28",
+      "mcp-method": method,
+      ...(name ? { "mcp-name": name } : {}),
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params: {
+        ...params,
+        _meta: {
+          "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+          "io.modelcontextprotocol/clientInfo": { name: "test", version: "1.0.0" },
+          "io.modelcontextprotocol/clientCapabilities": {},
+        },
+      },
+    }),
+  });
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  mocks.buildPublicAiStudyIndex.mockResolvedValue({
+    studyId: id,
+    player: {
+      rank: "Diamond 1",
+      sensitivity: { dpi: 1600, inGame: 0.1 },
+      videoSettings: { resolution: "1920x1080" },
+      context: "test context",
+    },
+    status: "completed",
+    framesExpiredAt: null,
+    frameCount: 7072,
+    timestampNote: "Sampling timeline",
+    coachingProtocol: { redditResearchRequired: true, promptTemplateVersion: "v1" },
+    prompt: "Inspect the entire match and coach the player.",
+  });
+  mocks.buildPublicAiFramePage.mockResolvedValue({
+    studyId: id,
+    total: 7072,
+    timestampNote: "Sampling timeline",
+    frames: [
+      { name: "000001.jpg", timestampMs: 0, url: `/${id}/frames/000001.jpg` },
+      { name: "000002.jpg", timestampMs: 200, url: `/${id}/frames/000002.jpg` },
+    ],
+  });
+});
+
+describe("ValoStudy MCP", () => {
+  it("serves modern server/discover", async () => {
+    const response = await handleMcpRequest(modernRequest("server/discover"));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.result.supportedVersions).toEqual(["2026-07-28"]);
+    expect(body.result.capabilities).toEqual({ tools: {} });
+    expect(body.result._meta["io.modelcontextprotocol/serverInfo"]).toEqual({
+      name: "valostudy",
+      version: "1.0.0",
+    });
+  });
+
+  it("lists the five deterministic read-only tools", async () => {
+    const response = await handleMcpRequest(modernRequest("tools/list"));
+    const body = await response.json();
+    expect(body.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
+      "get_study",
+      "get_player_settings",
+      "get_coaching_prompt",
+      "list_frames",
+      "get_frame",
+    ]);
+    expect(MCP_TOOLS).toHaveLength(5);
+  });
+
+  it("returns Study context through tools/call", async () => {
+    const response = await handleMcpRequest(modernRequest(
+      "tools/call",
+      { name: "get_study", arguments: { study_id: id } },
+      "get_study",
+    ));
+    const body = await response.json();
+    expect(body.result.isError).toBeUndefined();
+    expect(body.result.structuredContent.studyId).toBe(id);
+    expect(body.result.structuredContent.frameCount).toBe(7072);
+    expect(body.result.structuredContent.manifest_url).toBe(
+      `https://valostudy.example.com/${id}/manifest.json`,
+    );
+    expect(mocks.buildPublicAiStudyIndex).toHaveBeenCalledWith(id);
+  });
+
+  it("pages frame metadata through tools/call", async () => {
+    const response = await handleMcpRequest(modernRequest(
+      "tools/call",
+      { name: "list_frames", arguments: { study_id: id, offset: 240, limit: 2 } },
+      "list_frames",
+    ));
+    const body = await response.json();
+    expect(body.result.structuredContent.frames[0]).toEqual({
+      frame_name: "000001.jpg",
+      timestamp_ms: 0,
+      url: `https://valostudy.example.com/${id}/frames/000001.jpg`,
+    });
+    expect(mocks.buildPublicAiFramePage).toHaveBeenCalledWith(id, 240, 2);
+  });
+
+  it("supports the 2025 initialize handshake as a compatibility fallback", async () => {
+    const request = new Request("https://valostudy.example.com/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 9,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "legacy-test", version: "1.0.0" },
+        },
+      }),
+    });
+    const response = await handleMcpRequest(request);
+    const body = await response.json();
+    expect(body.result.protocolVersion).toBe("2025-11-25");
+    expect(body.result.serverInfo).toEqual({ name: "valostudy", version: "1.0.0" });
+    expect(body.result.capabilities).toEqual({ tools: { listChanged: false } });
+  });
+
+  it("rejects modern header/body routing mismatches", async () => {
+    const request = modernRequest(
+      "tools/call",
+      { name: "get_study", arguments: { study_id: id } },
+      "wrong_tool",
+    );
+    const response = await handleMcpRequest(request);
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error.code).toBe(-32020);
+  });
+
+  it("keeps private or missing Studies as tool errors", async () => {
+    mocks.buildPublicAiStudyIndex.mockRejectedValueOnce(new Error("not public"));
+    const response = await handleMcpRequest(modernRequest(
+      "tools/call",
+      { name: "get_study", arguments: { study_id: id } },
+      "get_study",
+    ));
+    const body = await response.json();
+    expect(body.result.isError).toBe(true);
+    expect(body.result.structuredContent.error).toBe("Tool execution failed");
+  });
+});
