@@ -129,7 +129,11 @@ export function UploadForm() {
         throw new Error(result.error.message);
       }
       if (signingUp) {
-        setMessage("確認メールを送信しました。メール内のリンクを開いて登録を完了してください。");
+        const currentSession = await authClient.getSession();
+        if (!currentSession.data) {
+          window.location.assign("/verify-email");
+          return;
+        }
       }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "ログイン失敗");
