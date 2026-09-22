@@ -3,6 +3,7 @@ import { AccountPanel } from "../../components/account-panel";
 
 export const metadata = {
   title: "マイページ | VALOSTUDY",
+  robots: { index: false, follow: false },
 };
 
 export default function AccountPage() {
