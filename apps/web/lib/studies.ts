@@ -189,20 +189,38 @@ export async function buildPublicAiStudyIndex(id: string) {
   const study = await readableStudy(id);
   if (!study) throw new HttpError(404, "Study not found");
 
-  const [[snapshot], countRows] = await Promise.all([
+  const [[snapshot], [upload], frameStats] = await Promise.all([
     db().select().from(promptSnapshots).where(eq(promptSnapshots.studyId, id)),
+    db().select({ metadata: uploads.metadata }).from(uploads).where(eq(uploads.studyId, id)),
     study.status === "completed" && !study.framesExpiredAt
-      ? db().select({ count: sql<number>`count(*)` }).from(frames).where(eq(frames.studyId, id))
-      : Promise.resolve([{ count: 0 }]),
+      ? db().select({
+          count: sql<number>`count(*)`,
+          firstTimestampMs: sql<number | null>`min(${frames.timestampMs})`,
+          lastTimestampMs: sql<number | null>`max(${frames.timestampMs})`,
+        }).from(frames).where(eq(frames.studyId, id))
+      : Promise.resolve([{ count: 0, firstTimestampMs: null, lastTimestampMs: null }]),
   ]);
   if (!snapshot) throw new Error("Missing prompt snapshot");
+
+  const durationMs = upload?.metadata?.duration
+    ? Math.round(upload.metadata.duration * 1000)
+    : null;
 
   return {
     studyId: id,
     player: study.player,
     status: study.status,
     framesExpiredAt: study.framesExpiredAt?.toISOString() ?? null,
-    frameCount: Number(countRows[0]?.count ?? 0),
+    frameCount: Number(frameStats[0]?.count ?? 0),
+    timeline: {
+      origin: "video_start" as const,
+      unit: "ms" as const,
+      durationMs,
+      samplingFps: study.options.fps,
+      samplingIntervalMs: Math.round(1000 / study.options.fps),
+      observedStartMs: frameStats[0]?.firstTimestampMs ?? null,
+      observedEndMs: frameStats[0]?.lastTimestampMs ?? null,
+    },
     timestampNote: VCMR_TIMESTAMP_SEMANTICS,
     coachingProtocol: {
       redditResearchRequired: true,
