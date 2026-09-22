@@ -292,19 +292,36 @@ function validateTemporalModel(
   if (JSON.stringify(value.timeline.observedRange) !== JSON.stringify(expectedRange)) {
     ctx.addIssue({ code: "custom", message: "Timeline observedRange must match frame timestamps", path: ["timeline", "observedRange"] });
   }
+  if (value.timeline.durationMs !== null && last !== null && last > value.timeline.durationMs) {
+    ctx.addIssue({ code: "custom", message: "Observed frame timestamps must not exceed media duration", path: ["timeline", "observedRange"] });
+  }
 
   const frameIds = new Set(value.frames.map((frame) => frame.id));
+  const roundIds = new Set(value.rounds.map((round) => round.id));
+  const canReferenceUnretainedFrame = (frameId: string) => {
+    if (frameIds.has(frameId)) return true;
+    if (value.frames.length !== 0 || value.timeline.coverage.expectedFrameCount === null) return false;
+    const sampleNumber = Number.parseInt(frameId.slice("frame_".length), 10);
+    return Number.isInteger(sampleNumber)
+      && sampleNumber >= 1
+      && sampleNumber <= value.timeline.coverage.expectedFrameCount;
+  };
+  const durationMs = value.timeline.durationMs;
   for (let index = 0; index < value.rounds.length; index += 1) {
     const round = value.rounds[index];
     if (round.endMs !== null && round.endMs < round.startMs)
       ctx.addIssue({ code: "custom", message: "Round endMs must be at or after startMs", path: ["rounds", index, "endMs"] });
+    if (durationMs !== null && round.startMs > durationMs)
+      ctx.addIssue({ code: "custom", message: "Round startMs must not exceed media duration", path: ["rounds", index, "startMs"] });
+    if (durationMs !== null && round.endMs !== null && round.endMs > durationMs)
+      ctx.addIssue({ code: "custom", message: "Round endMs must not exceed media duration", path: ["rounds", index, "endMs"] });
     if (round.freezeEndMs !== null && round.freezeEndMs < round.startMs)
       ctx.addIssue({ code: "custom", message: "Round freezeEndMs must be at or after startMs", path: ["rounds", index, "freezeEndMs"] });
     if (round.endMs !== null && round.freezeEndMs !== null && round.freezeEndMs > round.endMs)
       ctx.addIssue({ code: "custom", message: "Round freezeEndMs must not exceed endMs", path: ["rounds", index, "freezeEndMs"] });
     for (const [key, frameId] of [["startFrameId", round.startFrameId], ["endFrameId", round.endFrameId]] as const) {
-      if (frameId !== null && !frameIds.has(frameId))
-        ctx.addIssue({ code: "custom", message: "Round frame reference must exist", path: ["rounds", index, key] });
+      if (frameId !== null && !canReferenceUnretainedFrame(frameId))
+        ctx.addIssue({ code: "custom", message: "Round frame reference must exist in the canonical sample space", path: ["rounds", index, key] });
     }
   }
 
@@ -312,14 +329,22 @@ function validateTemporalModel(
     const event = value.events[index];
     if (event.endTimestampMs !== null && event.endTimestampMs < event.timestampMs)
       ctx.addIssue({ code: "custom", message: "Event endTimestampMs must be at or after timestampMs", path: ["events", index, "endTimestampMs"] });
+    if (durationMs !== null && event.timestampMs > durationMs)
+      ctx.addIssue({ code: "custom", message: "Event timestampMs must not exceed media duration", path: ["events", index, "timestampMs"] });
+    if (durationMs !== null && event.endTimestampMs !== null && event.endTimestampMs > durationMs)
+      ctx.addIssue({ code: "custom", message: "Event endTimestampMs must not exceed media duration", path: ["events", index, "endTimestampMs"] });
+    if (event.roundId !== null && !roundIds.has(event.roundId))
+      ctx.addIssue({ code: "custom", message: "Event roundId must reference an existing round", path: ["events", index, "roundId"] });
     for (const frameId of event.evidenceFrameIds) {
-      if (!frameIds.has(frameId))
-        ctx.addIssue({ code: "custom", message: "Event evidence frame reference must exist", path: ["events", index, "evidenceFrameIds"] });
+      if (!canReferenceUnretainedFrame(frameId))
+        ctx.addIssue({ code: "custom", message: "Event evidence frame reference must exist in the canonical sample space", path: ["events", index, "evidenceFrameIds"] });
     }
   }
 
   for (let index = 0; index < value.annotations.length; index += 1) {
     const annotation = value.annotations[index];
+    if (annotation.timestampMs === null && annotation.endTimestampMs !== null)
+      ctx.addIssue({ code: "custom", message: "Annotation endTimestampMs requires timestampMs", path: ["annotations", index, "endTimestampMs"] });
     if (
       annotation.timestampMs !== null
       && annotation.endTimestampMs !== null
@@ -327,9 +352,13 @@ function validateTemporalModel(
     ) {
       ctx.addIssue({ code: "custom", message: "Annotation endTimestampMs must be at or after timestampMs", path: ["annotations", index, "endTimestampMs"] });
     }
+    if (durationMs !== null && annotation.timestampMs !== null && annotation.timestampMs > durationMs)
+      ctx.addIssue({ code: "custom", message: "Annotation timestampMs must not exceed media duration", path: ["annotations", index, "timestampMs"] });
+    if (durationMs !== null && annotation.endTimestampMs !== null && annotation.endTimestampMs > durationMs)
+      ctx.addIssue({ code: "custom", message: "Annotation endTimestampMs must not exceed media duration", path: ["annotations", index, "endTimestampMs"] });
     for (const frameId of annotation.frameIds) {
-      if (!frameIds.has(frameId))
-        ctx.addIssue({ code: "custom", message: "Annotation frame reference must exist", path: ["annotations", index, "frameIds"] });
+      if (!canReferenceUnretainedFrame(frameId))
+        ctx.addIssue({ code: "custom", message: "Annotation frame reference must exist in the canonical sample space", path: ["annotations", index, "frameIds"] });
     }
   }
 }
