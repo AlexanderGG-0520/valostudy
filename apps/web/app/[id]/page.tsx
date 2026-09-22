@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { config } from "@valostudy/config";
 import { notFound } from "next/navigation";
 import { auth } from "../../lib/auth";
 import { buildManifest } from "../../lib/studies";
@@ -6,6 +7,7 @@ import { HttpError } from "../../lib/http";
 import { StudyProcessingRefresh } from "../../components/study-processing-refresh";
 import { ProcessingTiming } from "../../components/processing-timing";
 import { FrameGallery } from "../../components/frame-gallery";
+import { AiCoachingCard } from "../../components/ai-coaching-card";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,8 @@ function phaseState(current: string | undefined, phase: string) {
 
 export default async function StudyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const appConfig = config();
+  const appUrl = appConfig.PUBLIC_APP_URL ?? appConfig.BETTER_AUTH_URL;
   const session = await auth().api.getSession({ headers: await headers() });
   const m = await buildManifest(id, session?.user.id).catch((e: unknown) => {
     if (e instanceof HttpError && e.status === 404) notFound();
@@ -120,6 +124,9 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
         新しいStudyとして再アップロードするか、Workerログを確認してください。
       </p>
     </section>}
+
+    {m.status === "completed" && !m.framesExpiredAt && m.frames.length > 0 &&
+      <AiCoachingCard studyId={m.studyId} appUrl={appUrl} />}
 
     {m.status === "completed" && <>
       <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>
