@@ -192,28 +192,55 @@ export async function extract(
 
   const names = (await readdir(directory)).filter((name) => /^[0-9]{6}\.jpg$/.test(name)).sort();
   if (!names.length) throw new Error("No frames extracted");
+
+  const durationMs = Math.round(metadata.duration * 1000);
+  const samplingIntervalMs = Math.round(1000 / o.fps);
+  const extractedFrames = names.map((name) => {
+    const sampleIndex = Number.parseInt(name.slice(0, 6), 10) - 1;
+    return {
+      id: `frame_${name.slice(0, 6)}`,
+      name,
+      sampleIndex,
+      timestampMs: Math.round((sampleIndex / o.fps) * 1000),
+      source: {
+        kind: "fixed_rate_sampling" as const,
+        approximateTimestamp: true as const,
+      },
+    };
+  });
+  const firstTimestampMs = extractedFrames[0]?.timestampMs ?? null;
+  const lastTimestampMs = extractedFrames.at(-1)?.timestampMs ?? null;
+
   return vcmrExtractionSchema.parse({
     schema: VCMR_SCHEMA,
     schemaVersion: VCMR_SCHEMA_VERSION,
     media: {
       width: metadata.width,
       height: metadata.height,
-      durationMs: Math.round(metadata.duration * 1000),
+      durationMs,
       sampling: {
         fps: o.fps,
         strategy: "fixed_rate",
         timestampSemantics: VCMR_TIMESTAMP_SEMANTICS,
       },
     },
-    frames: names.map((name) => ({
-      id: `frame_${name.slice(0, 6)}`,
-      name,
-      timestampMs: Math.round(((Number.parseInt(name.slice(0, 6), 10) - 1) / o.fps) * 1000),
-      source: {
-        kind: "fixed_rate_sampling",
-        approximateTimestamp: true,
+    timeline: {
+      origin: "video_start",
+      unit: "ms",
+      frameOrdering: "sample_index",
+      durationMs,
+      samplingIntervalMs,
+      frameCount: extractedFrames.length,
+      observedRange: firstTimestampMs === null || lastTimestampMs === null
+        ? null
+        : { startMs: firstTimestampMs, endMs: lastTimestampMs },
+      coverage: {
+        expectedFrameCount: expectedFrames,
+        observedFrameCount: extractedFrames.length,
+        complete: extractedFrames.length === expectedFrames,
       },
-    })),
+    },
+    frames: extractedFrames,
     rounds: [],
     events: [],
     annotations: [],
