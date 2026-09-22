@@ -102,8 +102,7 @@ export function ProApiPanel() {
         <h2>自分のStudyを外部ツールから読む。</h2>
       </div>
       <p className="section-copy">
-        Bearer API keyでStudy一覧とprivate manifestを取得できます。キーは発行時に一度だけ表示します。
-      </p>
+        Bearer API keyでStudy一覧とprivate manifestを取得できます。キーは発行時に一度だけ表示します。{" "}\n        <Link className="inline-doc-link" href="/docs/api">API docs →</Link>\n      </p>
     </div>
 
     <div className="api-actions">
