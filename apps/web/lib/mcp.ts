@@ -1,5 +1,5 @@
 import { and, db, eq, frames } from "@valostudy/db";
-import { log } from "@valostudy/config";
+import { config, log } from "@valostudy/config";
 import { frameNameSchema, studyIdSchema } from "@valostudy/schema";
 import { Storage } from "@valostudy/storage";
 import { buildPublicAiFramePage, buildPublicAiStudyIndex, readableStudy } from "./studies";
@@ -259,18 +259,6 @@ export const MCP_TOOLS: ToolDefinition[] = [
       required: ["study_id", "frame_name"],
       additionalProperties: false,
     },
-    outputSchema: {
-      type: "object",
-      properties: {
-        study_id: STUDY_ID_PROPERTY,
-        frame_name: { type: "string", pattern: "^\\d{6}\\.(?:jpg|webp)$" },
-        timestamp_ms: { type: "integer", minimum: 0 },
-        mime_type: { type: "string", enum: ["image/jpeg", "image/webp"] },
-        url: URL_PROPERTY,
-      },
-      required: ["study_id", "frame_name", "timestamp_ms", "mime_type", "url"],
-      additionalProperties: false,
-    },
     securitySchemes: NO_AUTH,
     annotations: READ_ONLY,
   },
@@ -285,6 +273,7 @@ function withServerMeta<T extends Record<string, unknown>>(result: T, modern: bo
   if (!modern) return result;
   return {
     ...result,
+    resultType: typeof result.resultType === "string" ? result.resultType : "complete",
     _meta: {
       ...(typeof result._meta === "object" && result._meta ? result._meta : {}),
       "io.modelcontextprotocol/serverInfo": SERVER_INFO,
@@ -345,6 +334,11 @@ function intArgument(args: Record<string, unknown>, key: string, fallback: numbe
   return value as number;
 }
 
+function publicOrigin() {
+  const c = config();
+  return new URL(c.PUBLIC_APP_URL ?? c.BETTER_AUTH_URL).origin;
+}
+
 function absoluteUrl(origin: string, path: string) {
   return new URL(path, origin).toString();
 }
@@ -385,7 +379,6 @@ async function publicFrame(id: string, name: string, origin: string) {
       { type: "image", data: Buffer.from(bytes).toString("base64"), mimeType },
       { type: "text", text: JSON.stringify(metadata) },
     ],
-    structuredContent: metadata,
   };
 }
 
@@ -569,7 +562,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
 
       const startedAt = Date.now();
       try {
-        const result = await callTool(name, args as Record<string, unknown>, new URL(request.url).origin);
+        const result = await callTool(name, args as Record<string, unknown>, publicOrigin());
         log("mcp_tool_call", { tool: name, outcome: "ok", durationMs: Date.now() - startedAt });
         return rpcResult(id, result, modern);
       } catch (error) {
