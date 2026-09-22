@@ -4,6 +4,7 @@ metadata:
   name: valostudy-config
 data:
   BETTER_AUTH_URL: https://valostudy.alec-ofc.com
+  PUBLIC_APP_URL: https://valostudy.alec-ofc.com
   S3_ENDPOINT: https://f74f93d265d7e4bd911aa44934795ab6.r2.cloudflarestorage.com
   S3_REGION: auto
   S3_BUCKET: valostudy
