@@ -36,9 +36,20 @@ describe("VCMR", () => {
           timestampSemantics: VCMR_TIMESTAMP_SEMANTICS,
         },
       },
+      timeline: {
+        origin: "video_start",
+        unit: "ms",
+        frameOrdering: "sample_index",
+        durationMs: 1250,
+        samplingIntervalMs: 500,
+        frameCount: 1,
+        observedRange: { startMs: 0, endMs: 0 },
+        coverage: { expectedFrameCount: 3, observedFrameCount: 1, complete: false },
+      },
       frames: [{
         id: "frame_000001",
         name: "000001.jpg",
+        sampleIndex: 0,
         timestampMs: 0,
         source: { kind: "fixed_rate_sampling", approximateTimestamp: true },
       }],
@@ -48,7 +59,7 @@ describe("VCMR", () => {
     });
 
     expect(result.schema).toBe("valostudy.vcmr");
-    expect(result.schemaVersion).toBe("1.0.0");
+    expect(result.schemaVersion).toBe("1.1.0");
   });
 
   it("rejects frame identity drift", () => {
@@ -65,9 +76,20 @@ describe("VCMR", () => {
           timestampSemantics: VCMR_TIMESTAMP_SEMANTICS,
         },
       },
+      timeline: {
+        origin: "video_start",
+        unit: "ms",
+        frameOrdering: "sample_index",
+        durationMs: 1000,
+        samplingIntervalMs: 1000,
+        frameCount: 1,
+        observedRange: { startMs: 0, endMs: 0 },
+        coverage: { expectedFrameCount: 1, observedFrameCount: 1, complete: true },
+      },
       frames: [{
         id: "frame_000002",
         name: "000001.jpg",
+        sampleIndex: 0,
         timestampMs: 0,
         source: { kind: "fixed_rate_sampling", approximateTimestamp: true },
       }],
@@ -101,9 +123,20 @@ describe("VCMR", () => {
         },
       },
       processing: { progress: null, framesExpiredAt: null },
+      timeline: {
+        origin: "video_start",
+        unit: "ms",
+        frameOrdering: "sample_index",
+        durationMs: 1000,
+        samplingIntervalMs: 1000,
+        frameCount: 1,
+        observedRange: { startMs: 0, endMs: 0 },
+        coverage: { expectedFrameCount: 1, observedFrameCount: 1, complete: true },
+      },
       frames: [{
         id: "frame_000001",
         name: "000001.jpg",
+        sampleIndex: 0,
         timestampMs: 0,
         url: "/3fa91bc72de/frames/000001.jpg",
         source: { kind: "fixed_rate_sampling", approximateTimestamp: true },
@@ -120,5 +153,63 @@ describe("VCMR", () => {
     expect(result.rounds).toEqual([]);
     expect(result.events).toEqual([]);
     expect(result.annotations).toEqual([]);
+    expect(result.timeline).toMatchObject({
+      origin: "video_start",
+      samplingIntervalMs: 1000,
+      observedRange: { startMs: 0, endMs: 0 },
+      coverage: { complete: true },
+    });
+  });
+
+  it("rejects temporal metadata that drifts from sampled evidence", () => {
+    expect(() => vcmrMatchSchema.parse({
+      schema: VCMR_SCHEMA,
+      schemaVersion: VCMR_SCHEMA_VERSION,
+      study: {
+        id: "3fa91bc72de",
+        game: "valorant",
+        visibility: "private",
+        status: "completed",
+        createdAt: "2026-09-22T00:00:00.000Z",
+        completedAt: "2026-09-22T00:01:00.000Z",
+      },
+      player,
+      media: {
+        width: 1920,
+        height: 1080,
+        durationMs: 1000,
+        sampling: {
+          fps: 1,
+          strategy: "fixed_rate",
+          timestampSemantics: VCMR_TIMESTAMP_SEMANTICS,
+        },
+      },
+      processing: { progress: null, framesExpiredAt: null },
+      timeline: {
+        origin: "video_start",
+        unit: "ms",
+        frameOrdering: "sample_index",
+        durationMs: 1000,
+        samplingIntervalMs: 500,
+        frameCount: 2,
+        observedRange: { startMs: 0, endMs: 500 },
+        coverage: { expectedFrameCount: 1, observedFrameCount: 2, complete: false },
+      },
+      frames: [{
+        id: "frame_000001",
+        name: "000001.jpg",
+        sampleIndex: 0,
+        timestampMs: 0,
+        url: "/3fa91bc72de/frames/000001.jpg",
+        source: { kind: "fixed_rate_sampling", approximateTimestamp: true },
+      }],
+      rounds: [],
+      events: [],
+      annotations: [],
+      coaching: {
+        protocol: { redditResearchRequired: true, promptTemplateVersion: "v1" },
+        prompt: "Coach this match.",
+      },
+    })).toThrow();
   });
 });
