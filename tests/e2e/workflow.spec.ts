@@ -141,6 +141,63 @@ for (const visibility of ["public", "private"] as const) {
         manifest.frames[0].url,
       ])
         expect((await anonymous.request.get(path)).status()).toBe(visibility === "public" ? 200 : 404);
+
+      if (visibility === "public") {
+        const mcpCall = async (name: string, args: Record<string, unknown>) => {
+          const response = await anonymous.request.post("/mcp", {
+            headers: {
+              "content-type": "application/json",
+              "accept": "application/json, text/event-stream",
+              "mcp-protocol-version": "2026-07-28",
+              "mcp-method": "tools/call",
+              "mcp-name": name,
+            },
+            data: {
+              jsonrpc: "2.0",
+              id: 1,
+              method: "tools/call",
+              params: {
+                name,
+                arguments: args,
+                _meta: {
+                  "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                  "io.modelcontextprotocol/clientInfo": { name: "valostudy-e2e", version: "1.0.0" },
+                  "io.modelcontextprotocol/clientCapabilities": {},
+                },
+              },
+            },
+          });
+          expect(response.status()).toBe(200);
+          return response.json() as Promise<{
+            result: {
+              resultType?: string;
+              content?: Array<{ type: string; data?: string; mimeType?: string; text?: string }>;
+              structuredContent?: Record<string, unknown>;
+            };
+          }>;
+        };
+
+        const listed = await mcpCall("list_frames", { study_id: id, offset: 0, limit: 1 });
+        expect(listed.result.resultType).toBe("complete");
+        const listedFrame = (listed.result.structuredContent?.frames as Array<{ url: string }>)[0];
+        expect(new URL(listedFrame.url).origin).toBe(new URL(c.PUBLIC_APP_URL ?? c.BETTER_AUTH_URL).origin);
+        expect(listedFrame.url).not.toContain("0.0.0.0");
+
+        const frameName = manifest.frames[0].url.split("/").at(-1)!;
+        const frameResult = await mcpCall("get_frame", { study_id: id, frame_name: frameName });
+        expect(frameResult.result.resultType).toBe("complete");
+        expect(frameResult.result.structuredContent).toBeUndefined();
+        expect(frameResult.result.content?.[0]).toMatchObject({
+          type: "image",
+          mimeType: "image/jpeg",
+        });
+        const imageBytes = Buffer.from(frameResult.result.content?.[0].data ?? "", "base64");
+        expect(Array.from(imageBytes.subarray(0, 3))).toEqual([0xff, 0xd8, 0xff]);
+        const metadata = JSON.parse(frameResult.result.content?.[1].text ?? "{}") as { url: string; mime_type: string };
+        expect(metadata.mime_type).toBe("image/jpeg");
+        expect(new URL(metadata.url).origin).toBe(new URL(c.PUBLIC_APP_URL ?? c.BETTER_AUTH_URL).origin);
+        expect(metadata.url).not.toContain("0.0.0.0");
+      }
       // Even another authenticated account cannot mutate the owner's upload.
       const other = await anonymous.newPage();
       await signup(other);
