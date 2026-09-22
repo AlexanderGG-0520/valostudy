@@ -38,6 +38,7 @@ function phaseState(current: string | undefined, phase: string) {
 
 export default async function StudyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const appUrl = (process.env.PUBLIC_APP_URL ?? process.env.BETTER_AUTH_URL ?? "https://valostudy.alec-ofc.com").replace(/\/$/, "");
   const session = await auth().api.getSession({ headers: await headers() });
   const m = await buildManifest(id, session?.user.id).catch((e: unknown) => {
     if (e instanceof HttpError && e.status === 404) notFound();
@@ -123,7 +124,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     </section>}
 
     {m.status === "completed" && !m.framesExpiredAt && m.frames.length > 0 &&
-      <AiCoachingCard studyId={m.studyId} />}
+      <AiCoachingCard studyId={m.studyId} appUrl={appUrl} />}
 
     {m.status === "completed" && <>
       <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>
