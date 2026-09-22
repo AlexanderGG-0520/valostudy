@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";\nimport { useEffect, useState } from "react";
 import { createAuthClient } from "better-auth/react";
 import type { Plan } from "@valostudy/schema";
 import { Button } from "./ui/button";
