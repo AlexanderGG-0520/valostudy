@@ -210,6 +210,7 @@ export async function buildPublicAiFramePage(id: string, offset: number, limit: 
     total: Number(totalRow?.count ?? 0),
     timestampNote: VCMR_TIMESTAMP_SEMANTICS,
     frames: rows.map((frame) => ({
+      name: frame.name,
       timestampMs: frame.timestampMs,
       url: `/${id}/frames/${frame.name}`,
     })),
