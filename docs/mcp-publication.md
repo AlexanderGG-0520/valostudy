@@ -22,7 +22,7 @@ This document is the submission checklist for publishing that MCP as part of an 
 
 ### get_study
 
-Start a coaching workflow by validating the Study and retrieving its processing/frame state plus canonical URLs. It deliberately does not duplicate player settings or the coaching prompt.
+Start a coaching workflow by validating the Study and retrieving its processing/frame state, VCMR schema version, canonical timeline summary, and canonical URLs. It deliberately does not duplicate player settings or the coaching prompt.
 
 ### get_player_settings
 
@@ -36,7 +36,7 @@ Returns the immutable ValoStudy coaching prompt snapshot and protocol metadata s
 
 ### list_frames
 
-Returns deterministic, ordered frame metadata pages for a completed public Study. Maximum page size is 240.
+Returns deterministic, ordered frame metadata pages for a completed public Study. Maximum page size is 240. Optional inclusive `start_ms` / `end_ms` bounds seek within the canonical `video_start` timeline; each result includes the zero-based canonical `sample_index`.
 
 ### get_frame
 
@@ -73,7 +73,7 @@ The Plugin submission requires exactly five happy-path cases and exactly three n
 
 1. "Open Study 31f4c1b8ed3 and tell me whether frame evidence is available."
    - Expected tool: `get_study`
-   - Expected: public Study overview with status, frame count, timestamp semantics, and canonical URLs.
+   - Expected: public Study overview with status, frame count, VCMR version, canonical timeline summary, timestamp semantics, and canonical URLs.
 
 2. "Read the player settings for Study 31f4c1b8ed3."
    - Expected tool: `get_player_settings`
@@ -83,9 +83,9 @@ The Plugin submission requires exactly five happy-path cases and exactly three n
    - Expected tool: `get_coaching_prompt`
    - Expected: coaching protocol metadata and immutable prompt snapshot.
 
-4. "List the first 120 frames for Study 31f4c1b8ed3."
+4. "List up to 120 frames from 60s through 90s for Study 31f4c1b8ed3."
    - Expected tool: `list_frames`
-   - Expected: ordered frame metadata, total count, pagination fields, and public frame URLs.
+   - Expected: ordered frame metadata constrained by `start_ms=60000` / `end_ms=90000`, including canonical sample indexes and public frame URLs.
 
 5. "Show frame 000241.jpg from Study 31f4c1b8ed3."
    - Expected tool: `get_frame`
