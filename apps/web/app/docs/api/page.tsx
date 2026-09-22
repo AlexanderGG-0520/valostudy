@@ -3,6 +3,7 @@ import Link from "next/link";
 const endpoints = [
   ["GET", "/api/v1/studies", "自分が所有するStudy一覧"],
   ["GET", "/api/v1/studies/:id/manifest", "自分のStudyのprivate manifest"],
+  ["GET", "/api/v1/studies/:id/canonical", "自分のStudyのVCMR canonical representation"],
   ["GET", "/api/v1/clients", "Coach Workspaceのclient一覧"],
   ["GET", "/api/v1/clients/:id/manifest", "clientに紐づくStudy manifest"],
 ] as const;
