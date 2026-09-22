@@ -74,9 +74,8 @@ spec:
             - configMapRef: { name: valostudy-config }
             - secretRef: { name: valostudy-secrets }
           resources:
-resources:
-  requests: { cpu: "6", memory: 4Gi, ephemeral-storage: 16Gi }
-  limits: { cpu: "8", memory: 8Gi, ephemeral-storage: 140Gi }
+            requests: { cpu: "6", memory: 4Gi, ephemeral-storage: 16Gi }
+            limits: { cpu: "8", memory: 8Gi, ephemeral-storage: 140Gi }
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
           volumeMounts: [{ name: scratch, mountPath: /tmp }]
       volumes:
