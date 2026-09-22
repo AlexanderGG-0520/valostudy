@@ -194,9 +194,13 @@ runnerが専用Compose projectでPostgreSQL 17、Valkey 8、MinIOを起動し、
 Study IDは `crypto.randomBytes(6)` から作る11文字lowercase hex（44bit）、正規表現は `^[0-9a-f]{11}$`。DBのPRIMARY KEYとCHECKで保証し、衝突は最大8回まで再生成します。IDは認証tokenではありません。
 
 - Study: `https://valostudy.example.com/3fa91bc72de`
+- AI entry point: `/ai/3fa91bc72de`
+- AI frame index pages: `/ai/3fa91bc72de/frames/1`, `/frames/2`, ...
 - Canonical VCMR: `/3fa91bc72de/canonical.json`
 - Manifest (legacy projection): `/3fa91bc72de/manifest.json`
 - Frame: `/3fa91bc72de/frames/000001.jpg`
+
+The AI entry point is intentionally lightweight, server-rendered HTML for public Studies. It exposes player settings, the coaching protocol/prompt, frame count, and links to the canonical/manifest documents. Frame evidence is split into HTML index pages of at most 240 links so crawlers and AI assistants can traverse large Studies without requiring one enormous HTML document. Private Studies return 404 from the AI routes because they are resolved without an owner session.
 
 VCMR v1 (`valostudy.vcmr@1.0.0`) がStudyの正規表現です。現在のWorkerはmedia metadataとfixed-rate sampled frame evidenceをVCMRへ正規化し、PostgreSQL/object storageへ分割して永続化します。Web/APIはその正規化データからVCMR documentを決定的に組み立てます。既存manifestはVCMRから生成する互換projectionとして維持します。詳細は `docs/vcmr-v1.md` を参照してください。
 

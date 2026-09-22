@@ -121,7 +121,10 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
       </p>
     </section>}
 
-    {m.status === "completed" && <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>}
+    {m.status === "completed" && <>
+      <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>
+      <a className="study-link" href={"/ai/" + id}>AI用の軽量入口を開く <span>→</span></a>
+    </>}
 
     {m.framesExpiredAt && <section className="study-card retention-expired">
       <h2>フレーム保持期間が終了しました</h2>
