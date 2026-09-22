@@ -3,7 +3,8 @@ import { UploadForm } from "../components/upload-form";
 import { BillingPanel } from "../components/billing-panel";
 import { StudyLibrary } from "../components/study-library";
 import { ProApiPanel } from "../components/pro-api-panel";
-import { CoachWorkspace } from "../components/coach-workspace";\nimport { HomeStudyDemo } from "../components/home-study-demo";
+import { CoachWorkspace } from "../components/coach-workspace";
+import { HomeStudyDemo } from "../components/home-study-demo";
 
 export default function Home() {
   return <main className="site-shell">
@@ -12,6 +13,7 @@ export default function Home() {
         <p className="brand"><span className="brand-mark">VS</span> VALOSTUDY</p>
         <div className="brand-actions">
           <span className="brand-meta">PLAY · STUDY · REPEAT</span>
+          <Link className="account-link" href="/docs">Developers</Link>
           <Link className="account-link" href="/account">マイページ</Link>
         </div>
       </div>
@@ -36,7 +38,8 @@ export default function Home() {
       </div>
     </header>
 
-    <HomeStudyDemo />\n    <BillingPanel />
+    <HomeStudyDemo />
+    <BillingPanel />
     <UploadForm />
     <StudyLibrary />
     <CoachWorkspace />
