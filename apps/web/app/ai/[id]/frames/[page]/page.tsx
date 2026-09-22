@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { buildManifest } from "../../../../../lib/studies";
+import { buildPublicAiFramePage } from "../../../../../lib/studies";
 import { HttpError } from "../../../../../lib/http";
 
 export const dynamic = "force-dynamic";
@@ -15,18 +15,16 @@ export default async function AiFrameIndexPage({
   const page = Number(rawPage);
   if (!Number.isInteger(page) || page < 1) notFound();
 
-  const m = await buildManifest(id).catch((e: unknown) => {
+  const offset = (page - 1) * FRAME_PAGE_SIZE;
+  const m = await buildPublicAiFramePage(id, offset, FRAME_PAGE_SIZE).catch((e: unknown) => {
     if (e instanceof HttpError && e.status === 404) notFound();
     throw e;
   });
 
-  if (m.status !== "completed" || m.framesExpiredAt || m.frames.length === 0) notFound();
+  const totalPages = Math.ceil(m.total / FRAME_PAGE_SIZE);
+  if (page > totalPages || m.frames.length === 0) notFound();
 
-  const totalPages = Math.ceil(m.frames.length / FRAME_PAGE_SIZE);
-  if (page > totalPages) notFound();
-
-  const offset = (page - 1) * FRAME_PAGE_SIZE;
-  const batch = m.frames.slice(offset, offset + FRAME_PAGE_SIZE);
+  const batch = m.frames;
 
   return <main>
     <header>
