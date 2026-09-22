@@ -113,7 +113,8 @@ export function AiCoachingCard({ studyId, appUrl }: AiCoachingCardProps) {
         <p className="eyebrow">ONE-TIME SETUP</p>
         <h2 id="mcp-setup-title">ChatGPTでValoStudyを使う</h2>
         <p className="mcp-modal-copy">
-          ChatGPTのプラグイン設定からカスタムMCPを追加し、下のURLを登録してください。
+          ChatGPTのApps設定でDeveloper modeを有効にし、ValoStudyをカスタムMCPアプリとして追加します。
+          この機能を利用できるChatGPTアカウントが必要です。
         </p>
 
         <ol className="mcp-setup-steps">
@@ -121,14 +122,14 @@ export function AiCoachingCard({ studyId, appUrl }: AiCoachingCardProps) {
             <span>1</span>
             <div>
               <strong>ChatGPTを開く</strong>
-              <p>プラグイン設定からカスタムMCPの追加画面を開きます。</p>
+              <p>Settings → Apps → Advanced Settings でDeveloper modeを有効にし、Apps → Createを開きます。</p>
             </div>
           </li>
           <li>
             <span>2</span>
             <div>
               <strong>ValoStudy MCPを登録</strong>
-              <p>サーバーURLとして次のURLを貼り付けます。</p>
+              <p>Endpointとして次のURLを貼り付け、ツールをスキャンして作成します。</p>
               <div className="mcp-url-row">
                 <code>{mcpUrl}</code>
                 <button type="button" onClick={() => void copy(mcpUrl, "modal-mcp")}>
