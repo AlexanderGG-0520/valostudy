@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";\nimport { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { createAuthClient } from "better-auth/react";
 import type { Plan } from "@valostudy/schema";
 import { Button } from "./ui/button";
@@ -102,7 +103,9 @@ export function ProApiPanel() {
         <h2>自分のStudyを外部ツールから読む。</h2>
       </div>
       <p className="section-copy">
-        Bearer API keyでStudy一覧とprivate manifestを取得できます。キーは発行時に一度だけ表示します。{" "}\n        <Link className="inline-doc-link" href="/docs/api">API docs →</Link>\n      </p>
+        Bearer API keyでStudy一覧とprivate manifestを取得できます。キーは発行時に一度だけ表示します。{" "}
+        <Link className="inline-doc-link" href="/docs/api">API docs →</Link>
+      </p>
     </div>
 
     <div className="api-actions">
