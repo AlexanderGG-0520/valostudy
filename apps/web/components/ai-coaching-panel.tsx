@@ -59,9 +59,9 @@ export function AiCoachingPanel({ studyId, mcpUrl, isPublic }: AiCoachingPanelPr
 
           {setupOpen && <div className={styles.setup} id="valostudy-mcp-setup">
             <ol>
-              <li>ChatGPTでカスタムMCP / Pluginの追加画面を開きます。</li>
-              <li>下のMCP URLを登録します。</li>
-              <li>ValoStudyのツールが表示されたら接続完了です。</li>
+              <li>ChatGPTの Settings → Apps → Advanced Settings でDeveloper modeを有効にします。</li>
+              <li>Apps → Create を開き、Endpointとして下のMCP URLを登録します。</li>
+              <li>ツールをスキャンしてValoStudyを作成し、ツールが表示されたら接続完了です。</li>
             </ol>
             <div className={styles.copyRow}>
               <code>{mcpUrl}</code>
