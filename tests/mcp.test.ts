@@ -132,6 +132,7 @@ describe("ValoStudy MCP", () => {
     expect(MCP_TOOLS).toHaveLength(5);
 
     for (const tool of MCP_TOOLS) {
+      expect(tool.securitySchemes).toEqual([{ type: "noauth" }]);
       expect(tool.annotations).toEqual({
         readOnlyHint: true,
         destructiveHint: false,
