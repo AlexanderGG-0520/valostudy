@@ -8,6 +8,7 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NEXT_NOT_FOUND"); } }));
 import { GET } from "../apps/web/app/[id]/manifest.json/route";
 import StudyPage from "../apps/web/app/[id]/page";
+import robots from "../apps/web/app/robots";
 import { HttpError } from "../apps/web/lib/http";
 beforeEach(() => { vi.resetAllMocks(); mocks.getSession.mockResolvedValue(null); mocks.buildManifest.mockResolvedValue(manifest); });
 it("serves /{id}/manifest.json with no storage keys and without caching private data", async () => {
@@ -31,4 +32,14 @@ it("renders /{id} on the server with escaped user data and correct URLs", async 
 it("renders unauthorized Studies as not found", async () => {
   mocks.buildManifest.mockRejectedValue(new HttpError(404, "Study not found"));
   await expect(StudyPage({ params: Promise.resolve({ id }) })).rejects.toThrow("NEXT_NOT_FOUND");
+});
+it("explicitly permits ChatGPT search and user-triggered crawlers", () => {
+  expect(robots()).toEqual({
+    rules: [
+      { userAgent: "OAI-SearchBot", allow: "/" },
+      { userAgent: "ChatGPT-User", allow: "/" },
+      { userAgent: "GPTBot", disallow: "/" },
+      { userAgent: "*", allow: "/" },
+    ],
+  });
 });
