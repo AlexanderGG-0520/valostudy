@@ -2,6 +2,7 @@ import Link from "next/link";
 
 export const metadata = {
   title: "メールアドレスを確認 | VALOSTUDY",
+  robots: { index: false, follow: false },
 };
 
 export default function VerifyEmailPage() {
