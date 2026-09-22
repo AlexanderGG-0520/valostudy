@@ -65,7 +65,7 @@ spec:
     metadata:
       labels: { app: valostudy-worker }
     spec:
-      terminationGracePeriodSeconds: 660
+      terminationGracePeriodSeconds: 60
       securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000 }
       containers:
         - name: worker
@@ -74,8 +74,9 @@ spec:
             - configMapRef: { name: valostudy-config }
             - secretRef: { name: valostudy-secrets }
           resources:
-            requests: { cpu: "8", memory: 4Gi, ephemeral-storage: 16Gi }
-            limits: { cpu: "8", memory: 8Gi, ephemeral-storage: 140Gi }
+resources:
+  requests: { cpu: "6", memory: 4Gi, ephemeral-storage: 16Gi }
+  limits: { cpu: "8", memory: 8Gi, ephemeral-storage: 140Gi }
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
           volumeMounts: [{ name: scratch, mountPath: /tmp }]
       volumes:
