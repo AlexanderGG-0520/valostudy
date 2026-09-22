@@ -274,4 +274,4 @@ JSON logsにstudyId、jobId、stage、duration、frameCount、retryCount、error
 [BullMQ retries](https://docs.bullmq.io/guide/retrying-failing-jobs) /
 [BullMQ stalled jobs](https://docs.bullmq.io/guide/jobs/stalled)
 
-既存のGPL-3.0 [LICENSE](LICENSE)を維持しています。
+本プロジェクトはAGPL-3.0-only [LICENSE](LICENSE)で公開しています。
