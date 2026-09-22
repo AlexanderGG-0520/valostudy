@@ -3,7 +3,7 @@ import { UploadForm } from "../components/upload-form";
 import { BillingPanel } from "../components/billing-panel";
 import { StudyLibrary } from "../components/study-library";
 import { ProApiPanel } from "../components/pro-api-panel";
-import { CoachWorkspace } from "../components/coach-workspace";
+import { CoachWorkspace } from "../components/coach-workspace";\nimport { HomeStudyDemo } from "../components/home-study-demo";
 
 export default function Home() {
   return <main className="site-shell">
@@ -36,7 +36,7 @@ export default function Home() {
       </div>
     </header>
 
-    <BillingPanel />
+    <HomeStudyDemo />\n    <BillingPanel />
     <UploadForm />
     <StudyLibrary />
     <CoachWorkspace />
