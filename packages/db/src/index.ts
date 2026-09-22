@@ -2,7 +2,7 @@ import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 export * from "./schema";
-export { and, eq, inArray, asc, desc, gte, isNull, sql } from "drizzle-orm";
+export { and, eq, inArray, asc, desc, gte, lte, isNull, sql } from "drizzle-orm";
 
 let instance: ReturnType<typeof connect> | undefined;
 
