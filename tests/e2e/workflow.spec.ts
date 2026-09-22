@@ -131,6 +131,13 @@ for (const visibility of ["public", "private"] as const) {
     }
     await page.goto("/" + id);
     await expect(page.getByRole("heading", { name: "Study " + id })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "AIで試合をコーチング" })).toBeVisible();
+    const promptCopyButton = page.getByRole("button", { name: "コーチングプロンプトをコピー" });
+    if (visibility === "public") await expect(promptCopyButton).toBeEnabled();
+    else {
+      await expect(promptCopyButton).toBeDisabled();
+      await expect(page.getByText("現在のValoStudy MCPは公開Studyのみ参照できます。", { exact: false })).toBeVisible();
+    }
     await expect(page.locator("img")).toHaveCount(3);
     const anonymous = await browser.newContext({ baseURL: c.BETTER_AUTH_URL });
     try {
