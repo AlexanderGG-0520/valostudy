@@ -1,6 +1,5 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { config } from "@valostudy/config";
 import { auth } from "../../lib/auth";
 import { buildManifest, readableStudy } from "../../lib/studies";
 import { HttpError } from "../../lib/http";
@@ -54,8 +53,6 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
   const frameProgress = progress?.totalFrames
     ? `${(progress.processedFrames ?? 0).toLocaleString()} / ${progress.totalFrames.toLocaleString()} frames`
     : null;
-  const appConfig = config();
-  const appOrigin = (appConfig.PUBLIC_APP_URL ?? appConfig.BETTER_AUTH_URL).replace(/\/$/, "");
 
   return <main className="study-page">
     {processing && <StudyProcessingRefresh intervalMs={2000} />}
@@ -130,7 +127,7 @@ export default async function StudyPage({ params }: { params: Promise<{ id: stri
     {m.status === "completed" && <>
       <AiCoachingPanel
         studyId={id}
-        mcpUrl={`${appOrigin}/mcp`}
+        mcpUrl="/mcp"
         isPublic={study.visibility === "public"}
       />
       <a className="study-link" href={"/" + id + "/manifest.json"}>manifest.json を開く <span>→</span></a>
