@@ -19,8 +19,8 @@ export default function CanonicalSchemaDocsPage() {
       <h2>Canonical resource</h2>
       <pre><code>{`GET /{studyId}/canonical.json`}</code></pre>
       <p>
-        各Study自身が <code>canonical_schema_version</code> を公開するため、
-        consumerは特定バージョンを暗黙に仮定せずversionを見て処理できます。
+        VCMR documentは <code>schema</code> と <code>schemaVersion</code> を公開するため、
+        consumerはアプリのreleaseからversionを推測せず、contract identityを見て処理できます。
       </p>
     </section>
 
