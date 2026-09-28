@@ -17,7 +17,7 @@
     "db:migrate": "pnpm --filter @valostudy/db migrate"
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "^3.1136.0",
+    "@aws-sdk/client-s3": "^3.1140.0",
     "@electric-sql/pglite": "^0.5.8",
     "@eslint/js": "^9.39.0",
     "@playwright/test": "^1.63.0",
@@ -34,7 +34,7 @@
     "react-dom": "^19.3.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.0",
+    "typescript-eslint": "^8.70.1",
     "vitest": "^4.1.11"
   },
   "pnpm": {
