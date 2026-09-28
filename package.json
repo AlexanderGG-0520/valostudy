@@ -27,7 +27,7 @@
     "bullmq": "^5.81.5",
     "drizzle-orm": "^0.45.3",
     "esbuild": "^0.28.2",
-    "eslint": "^9.39.0",
+    "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.0.0",
     "postgres": "^3.4.9",
     "react": "^19.3.0",
