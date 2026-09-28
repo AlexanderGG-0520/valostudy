@@ -4,8 +4,8 @@
   "type": "module",
   "exports": "./src/index.ts",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1000.0",
-    "@aws-sdk/s3-request-presigner": "^3.1000.0",
+    "@aws-sdk/client-s3": "^3.1140.0",
+    "@aws-sdk/s3-request-presigner": "^3.1140.0",
     "@valostudy/schema": "workspace:*",
     "@valostudy/config": "workspace:*"
   }
