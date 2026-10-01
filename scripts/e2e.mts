@@ -62,9 +62,15 @@ function start(label: string, command: string, args: string[]) {
 }
 async function command(label: string, binary: string, args: string[]) {
   const child = start(label, binary, args);
+  let output = "";
+  const collect = (data: Buffer) => { output += data.toString(); };
+  child.stdout?.on("data", collect);
+  child.stderr?.on("data", collect);
   await new Promise<void>((done, reject) => {
     child.once("error", reject);
-    child.once("exit", (code, signal) => code === 0 ? done() : reject(new Error(`${label} exited ${code ?? signal}; see ${artifacts}/${label}.log`)));
+    child.once("exit", (code, signal) => code === 0 ? done() : reject(new Error(
+      `${label} exited ${code ?? signal}; see ${artifacts}/${label}.log${output.trim() ? `\n${redact(output.trim().split("\n").slice(-20).join("\n"))}` : ""}`,
+    )));
   });
 }
 const composeArgs = ["compose", "-p", project, "-f", "infra/docker/e2e.compose.yaml"];
@@ -119,7 +125,7 @@ try {
   const storage = new S3Client({ endpoint: env.S3_ENDPOINT, region: env.S3_REGION, forcePathStyle: true,
     credentials: { accessKeyId: env.S3_ACCESS_KEY, secretAccessKey: env.S3_SECRET_KEY } });
   try {
-    await until("MinIO", async () => { await storage.send(new ListBucketsCommand({})); return true; });
+    await until("S3-compatible storage", async () => { await storage.send(new ListBucketsCommand({})); return true; });
     await storage.send(new CreateBucketCommand({ Bucket: env.S3_BUCKET }));
   } finally { storage.destroy(); }
   // Applying twice checks migration idempotency on real PostgreSQL.
