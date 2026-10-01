@@ -22,12 +22,15 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: ["server", "/data", "--console-address", ":9001"]
+  rustfs:
+    image: rustfs/rustfs:1.0.0
     environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?}
-      MINIO_API_CORS_ALLOW_ORIGIN: ${BETTER_AUTH_URL:?}
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY:?}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY:?}
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CORS_ALLOWED_ORIGINS: ${BETTER_AUTH_URL:?}
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
     ports: ["127.0.0.1:${E2E_S3_PORT:?}:9000"]
     tmpfs: ["/data"]
