@@ -8,10 +8,10 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "next": "^16.2.0",
+    "next": "^16.4.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "better-auth": "1.7.5",
+    "better-auth": "1.7.7",
     "@valostudy/config": "workspace:*",
     "@valostudy/db": "workspace:*",
     "@valostudy/prompts": "workspace:*",
@@ -21,8 +21,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.5.0",
-    "@radix-ui/react-slot": "^1.2.4",
-    "@better-auth/passkey": "1.7.5"
+    "@radix-ui/react-slot": "^1.4.0",
+    "@better-auth/passkey": "1.7.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",
