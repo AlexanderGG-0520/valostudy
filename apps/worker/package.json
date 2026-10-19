@@ -13,7 +13,7 @@
     "@valostudy/db": "workspace:*",
     "@valostudy/schema": "workspace:*",
     "@valostudy/storage": "workspace:*",
-    "zod": "^4.3.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "tsx": "^4.21.0",
