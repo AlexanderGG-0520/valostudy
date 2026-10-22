@@ -12,7 +12,7 @@
     "migrate": "tsx src/migrate.ts"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.4",
     "postgres": "^3.4.8",
     "@valostudy/schema": "workspace:*"
   },
