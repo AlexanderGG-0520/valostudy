@@ -8,7 +8,7 @@
     "start": "tsx src/index.ts"
   },
   "dependencies": {
-    "bullmq": "^5.70.0",
+    "bullmq": "^6.3.8",
     "@valostudy/config": "workspace:*",
     "@valostudy/db": "workspace:*",
     "@valostudy/schema": "workspace:*",
