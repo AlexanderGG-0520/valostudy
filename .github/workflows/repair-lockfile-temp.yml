@@ -1,0 +1,38 @@
+name: Repair pnpm lockfile (temporary)
+
+on:
+  push:
+    branches:
+      - feat/marketing-landing-refresh-20261030
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Regenerate lockfile without running dependency scripts
+        run: pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
+      - name: Validate lockfile consistency
+        run: pnpm install --frozen-lockfile --lockfile-only --ignore-scripts
+      - name: Commit updated pnpm lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "Lockfile already consistent"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml
+          git commit -m "fix(ci): regenerate pnpm lockfile"
+          git push origin HEAD:feat/marketing-landing-refresh-20261030
