@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { UploadForm } from "../components/upload-form";
 import { BillingPanel } from "../components/billing-panel";
@@ -5,6 +6,18 @@ import { StudyLibrary } from "../components/study-library";
 import { ProApiPanel } from "../components/pro-api-panel";
 import { CoachWorkspace } from "../components/coach-workspace";
 import { HomeStudyDemo } from "../components/home-study-demo";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "ValoStudy",
+    title: "ValoStudy | VALORANTの試合を、次の勝利につなげよう",
+    description: "VALORANTの試合録画を、対応する外部AIが検証できるStudyに変換。無料プランで試合を振り返るための証拠データを作成できます。",
+    locale: "ja_JP",
+  },
+};
 
 const steps = [
   {
