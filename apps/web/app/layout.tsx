@@ -8,15 +8,6 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://valostudy.alec-ofc.com"),
   title: "ValoStudy | VALORANTの試合録画をAIで振り返るためのStudyに",
   description,
-  alternates: { canonical: "/" },
-  openGraph: {
-    type: "website",
-    url: "/",
-    siteName: "ValoStudy",
-    title: "ValoStudy | VALORANTの試合を、次の勝利につなげよう",
-    description,
-    locale: "ja_JP",
-  },
   twitter: {
     card: "summary",
     title: "ValoStudy | VALORANTの試合を振り返る",
