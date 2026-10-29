@@ -2183,3 +2183,231 @@ input[type="file"]::file-selector-button {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Marketing landing page: preserve product surfaces while making the onboarding path clear. */
+.marketing-anchor,
+.marketing-how-section {
+  scroll-margin-top: 22px;
+}
+
+.brand-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px 20px;
+}
+
+.marketing-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 28px;
+}
+
+.marketing-primary-link,
+.marketing-secondary-link {
+  display: inline-flex;
+  min-height: 52px;
+  padding: 12px 21px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid var(--olive-dark);
+  border-radius: 13px;
+  font-size: 0.91rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.marketing-primary-link {
+  background: var(--olive-dark);
+  color: #fffdf8;
+  box-shadow: 0 12px 25px rgba(51, 61, 47, 0.13);
+}
+
+.marketing-secondary-link {
+  background: var(--paper-strong);
+  color: var(--olive-dark);
+}
+
+.marketing-primary-link:hover {
+  background: #283025;
+}
+
+.marketing-secondary-link:hover {
+  background: var(--olive-soft);
+}
+
+.marketing-primary-link:focus-visible,
+.marketing-secondary-link:focus-visible {
+  outline: 3px solid #718563;
+  outline-offset: 3px;
+}
+
+.marketing-hero-notice {
+  max-width: 690px;
+  margin: 18px 0 0;
+  color: var(--muted-ink);
+  font-size: 0.78rem;
+  line-height: 1.75;
+}
+
+.marketing-how-section {
+  padding: 32px 0 52px;
+}
+
+.marketing-section-intro {
+  max-width: 820px;
+  margin-bottom: 24px;
+}
+
+.marketing-section-intro h2,
+.marketing-guidance h2 {
+  margin: 10px 0 13px;
+  font-size: clamp(1.6rem, 2.7vw, 2.5rem);
+  line-height: 1.25;
+  letter-spacing: -0.035em;
+}
+
+.marketing-section-intro > p:last-child,
+.marketing-guidance p:not(.section-index) {
+  color: var(--muted-ink);
+  line-height: 1.85;
+}
+
+.marketing-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.marketing-step {
+  min-width: 0;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(255, 250, 241, 0.72);
+  box-shadow: var(--shadow-soft);
+}
+
+.marketing-step-number {
+  display: inline-block;
+  padding-bottom: 16px;
+  color: var(--clay);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.marketing-step h3 {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+  letter-spacing: -0.025em;
+}
+
+.marketing-step p {
+  margin: 0;
+  color: var(--muted-ink);
+  font-size: 0.88rem;
+  line-height: 1.8;
+}
+
+.marketing-guidance {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 30px;
+  align-items: center;
+  margin: 34px 0;
+  padding: 34px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(223, 227, 214, 0.58);
+}
+
+.marketing-guidance-note {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid rgba(112, 99, 79, 0.2);
+  border-radius: 18px;
+  background: rgba(255, 250, 241, 0.75);
+}
+
+.marketing-guidance-note strong {
+  display: block;
+  line-height: 1.55;
+}
+
+.marketing-guidance-note p {
+  margin: 12px 0;
+  font-size: 0.83rem;
+}
+
+.marketing-demo-questions {
+  margin: 24px 0;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 250, 241, 0.62);
+}
+
+.marketing-demo-questions h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+
+.marketing-demo-questions ul {
+  margin: 0;
+  padding-left: 21px;
+  color: var(--muted-ink);
+  font-size: 0.86rem;
+  line-height: 1.9;
+}
+
+.marketing-demo-questions p {
+  margin: 12px 0 0;
+  color: var(--muted-ink);
+  font-size: 0.77rem;
+  line-height: 1.75;
+}
+
+@media (max-width: 820px) {
+  .marketing-steps,
+  .marketing-guidance {
+    grid-template-columns: 1fr;
+  }
+
+  .marketing-guidance {
+    padding: 24px 20px;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 520px) {
+  .brand-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .brand-actions {
+    justify-content: flex-start;
+    gap: 10px 17px;
+  }
+
+  .marketing-hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .marketing-primary-link,
+  .marketing-secondary-link {
+    width: 100%;
+  }
+
+  .marketing-step {
+    padding: 22px;
+  }
+}
