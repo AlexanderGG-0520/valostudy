@@ -1,9 +1,27 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+const description =
+  "VALORANTの試合録画を、対応する外部AIが検証できるStudyに変換。時間順のフレームとプレイヤー設定を整理し、自分のプレイを振り返る材料にできます。無料プランあり。";
+
 export const metadata: Metadata = {
-  title: "ValoStudy",
-  description: "録画を、次の判断の材料へ。",
+  metadataBase: new URL("https://valostudy.alec-ofc.com"),
+  title: "ValoStudy | VALORANTの試合録画をAIで振り返るためのStudyに",
+  description,
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "ValoStudy",
+    title: "ValoStudy | VALORANTの試合を、次の勝利につなげよう",
+    description,
+    locale: "ja_JP",
+  },
+  twitter: {
+    card: "summary",
+    title: "ValoStudy | VALORANTの試合を振り返る",
+    description,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
