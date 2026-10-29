@@ -19,10 +19,14 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      - name: Regenerate lockfile without running dependency scripts
-        run: pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
-      - name: Validate lockfile consistency
-        run: pnpm install --frozen-lockfile --lockfile-only --ignore-scripts
+      - name: Re-resolve full dependency graph without dependency scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm pnpm-lock.yaml
+          pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
+      - name: Validate resolution with a frozen full installation
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Commit updated pnpm lockfile
         shell: bash
         run: |
