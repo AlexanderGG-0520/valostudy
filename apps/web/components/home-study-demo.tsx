@@ -70,6 +70,16 @@ export function HomeStudyDemo() {
       </div>
     </div>
 
+    <div className="marketing-demo-questions">
+      <h3>このStudyを使って、外部AIにこんな質問ができます</h3>
+      <ul>
+        <li>04:00付近のミニマップとアビリティから、確認できる情報と不足している情報は？</li>
+        <li>16:00付近のポジショニングについて、画像から判断できる範囲で改善候補を挙げて。</li>
+        <li>27:00付近の交戦について、映像だけでは判断できない点も区別して説明して。</li>
+      </ul>
+      <p>質問例であり、AIによる分析結果ではありません。実際の回答は利用するモデルと入力する情報によって変わります。</p>
+    </div>
+
     <div className="developer-rail">
       <div>
         <p className="section-index">BUILD ON VALOSTUDY</p>
