@@ -7,7 +7,9 @@ services:
       POSTGRES_USER: valostudy_e2e
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?E2E runner supplies this}
     ports: ["127.0.0.1:${E2E_PG_PORT:?}:5432"]
-    tmpfs: ["/var/lib/postgresql/data"]
+    # PostgreSQL 18 stores versioned PGDATA under /var/lib/postgresql/18/docker.
+    # This is a disposable E2E tmpfs, not a persistent database volume.
+    tmpfs: ["/var/lib/postgresql"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U valostudy_e2e -d valostudy_e2e"]
       interval: 2s

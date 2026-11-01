@@ -254,6 +254,7 @@ export function BillingPanel() {
     <p className="billing-footnote">
       * Proは通常利用ではStudy数を表示上無制限とし、自動化された異常利用にだけfair-use保護を適用します。
       元動画は全プランでフレーム生成後に削除されます。
+      ValoStudyの料金に外部AIの利用料金は含まれません。AI分析の自動実行も行いません。
     </p>
     {message && <p className="status-line billing-error" role="status">{message}</p>}
   </section>;
