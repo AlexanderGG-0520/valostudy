@@ -152,11 +152,11 @@ describe("ValoStudy MCP", () => {
     expect(body.result.resultType).toBe("complete");
     expect(body.result._meta["io.modelcontextprotocol/serverInfo"]).toEqual({
       name: "valostudy",
-      version: "1.2.0",
+      version: "1.3.0",
     });
   });
 
-  it("lists five deterministic review-ready read-only tools", async () => {
+  it("lists six deterministic review-ready read-only tools", async () => {
     const response = await handleMcpRequest(modernRequest("tools/list"));
     const body = await response.json();
     expect(body.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
@@ -165,8 +165,9 @@ describe("ValoStudy MCP", () => {
       "get_coaching_prompt",
       "list_frames",
       "get_frame",
+      "get_frames",
     ]);
-    expect(MCP_TOOLS).toHaveLength(5);
+    expect(MCP_TOOLS).toHaveLength(6);
 
     for (const tool of MCP_TOOLS) {
       expect(tool.securitySchemes).toEqual([{ type: "noauth" }]);
@@ -177,7 +178,7 @@ describe("ValoStudy MCP", () => {
         openWorldHint: false,
       });
       expect(tool.inputSchema.additionalProperties).toBe(false);
-      if (tool.name === "get_frame") {
+      if (tool.name === "get_frame" || tool.name === "get_frames") {
         expect(tool.outputSchema).toBeUndefined();
       } else {
         expect(tool.outputSchema?.additionalProperties).toBe(false);
@@ -330,6 +331,109 @@ describe("ValoStudy MCP", () => {
     });
   });
 
+
+  function batchRequest(args: Record<string, unknown>) {
+    return modernRequest("tools/call", { name: "get_frames", arguments: { study_id: id, ...args } }, "get_frames");
+  }
+
+  it("returns ordered image/metadata pairs for explicit names", async () => {
+    mockFrame("000001.jpg", 0, [0xff, 0xd8]);
+    const where = vi.fn()
+      .mockResolvedValueOnce([{ name: "000003.webp", timestampMs: 400, objectKey: "third" }])
+      .mockResolvedValueOnce([{ name: "000001.jpg", timestampMs: 0, objectKey: "first" }]);
+    mocks.db.mockReturnValue({ select: () => ({ from: () => ({ where }) }) });
+    const body = await (await handleMcpRequest(batchRequest({
+      frame_names: ["000003.webp", "000001.jpg"],
+    }))).json();
+    expect(body.result.isError).toBeUndefined();
+    expect(JSON.parse(body.result.content[0].text)).toEqual({
+      study_id: id, frame_count: 2, frame_names: ["000003.webp", "000001.jpg"],
+    });
+    expect(body.result.content.map((item: { type: string }) => item.type))
+      .toEqual(["text", "image", "text", "image", "text"]);
+    expect(body.result.content[1].mimeType).toBe("image/webp");
+    expect(JSON.parse(body.result.content[2].text)).toMatchObject({ frame_name: "000003.webp", timestamp_ms: 400 });
+    expect(body.result.content[3].mimeType).toBe("image/jpeg");
+    expect(JSON.parse(body.result.content[4].text)).toMatchObject({ frame_name: "000001.jpg", timestamp_ms: 0 });
+    expect(mocks.storageGet).toHaveBeenCalledWith("third");
+    expect(mocks.storageGet).toHaveBeenCalledWith("first");
+  });
+
+  it("samples actual range rows evenly and includes endpoints", async () => {
+    mockFrame("000001.jpg", 0, [0xff, 0xd8]);
+    mocks.buildPublicAiFramePage.mockImplementation(async (_id, offset: number) => ({
+      total: 11,
+      frames: [{ name: String(101 + offset * 2).padStart(6, "0") + ".jpg" }],
+    }));
+    const body = await (await handleMcpRequest(batchRequest({
+      start_ms: 20_000, end_ms: 24_000, count: 3,
+    }))).json();
+    expect(body.result.isError).toBeUndefined();
+    expect(JSON.parse(body.result.content[0].text).frame_names)
+      .toEqual(["000101.jpg", "000111.jpg", "000121.jpg"]);
+    expect(mocks.buildPublicAiFramePage.mock.calls).toEqual([
+      [id, 0, 1, 20_000, 24_000],
+      [id, 5, 1, 20_000, 24_000],
+      [id, 10, 1, 20_000, 24_000],
+    ]);
+    expect(mocks.storageGet).toHaveBeenCalledTimes(3);
+  });
+
+  it("uses the middle frame for count=1 and clamps count to available rows", async () => {
+    mockFrame("000001.jpg", 0, [0xff, 0xd8]);
+    mocks.buildPublicAiFramePage.mockImplementation(async (_id, offset: number) => ({
+      total: 3,
+      frames: [{ name: String(offset + 1).padStart(6, "0") + ".jpg" }],
+    }));
+    const middle = await (await handleMcpRequest(batchRequest({ count: 1 }))).json();
+    expect(JSON.parse(middle.result.content[0].text).frame_names).toEqual(["000002.jpg"]);
+    const all = await (await handleMcpRequest(batchRequest({ count: 16 }))).json();
+    expect(JSON.parse(all.result.content[0].text).frame_names)
+      .toEqual(["000001.jpg", "000002.jpg", "000003.jpg"]);
+  });
+
+  it.each([
+    { count: 17 },
+    { count: 0 },
+    { frame_names: [] },
+    { frame_names: ["000001.jpg", "000001.jpg"] },
+    { frame_names: ["../private.jpg"] },
+    { frame_names: ["000001.jpg"], count: 2 },
+    { start_ms: 1000, end_ms: 0 },
+  ])("rejects invalid batch arguments: %j", async (args) => {
+    const body = await (await handleMcpRequest(batchRequest(args))).json();
+    expect(body.result.isError).toBe(true);
+    expect(mocks.storageGet).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty ranges without returning images", async () => {
+    mocks.buildPublicAiFramePage.mockResolvedValue({ total: 0, frames: [] });
+    const body = await (await handleMcpRequest(batchRequest({ start_ms: 99999999 }))).json();
+    expect(body.result.isError).toBe(true);
+    expect(mocks.storageGet).not.toHaveBeenCalled();
+  });
+
+  it.each([null, { status: "processing" }, { status: "completed", framesExpiredAt: new Date() }])(
+    "does not expose unavailable Study images: %j", async (study) => {
+      mocks.readableStudy.mockResolvedValue(study);
+      const body = await (await handleMcpRequest(batchRequest({ frame_names: ["000001.jpg"] }))).json();
+      expect(body.result.isError).toBe(true);
+      expect(mocks.storageGet).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns an actionable error rather than partial images when the response budget is exceeded", async () => {
+    mockFrame("000001.jpg", 0, [0xff, 0xd8]);
+    mocks.storageGet.mockResolvedValue({
+      Body: { transformToByteArray: async () => new Uint8Array(2_000_000) },
+    });
+    const body = await (await handleMcpRequest(batchRequest({
+      frame_names: ["000001.jpg", "000002.jpg"],
+    }))).json();
+    expect(body.result.isError).toBe(true);
+    expect(body.result.content).toEqual([{ type: "text", text: expect.stringContaining("retry with fewer frames") }]);
+  });
+
   it("supports the 2025 initialize handshake as a compatibility fallback", async () => {
     const request = new Request("https://0.0.0.0:3000/mcp", {
       method: "POST",
@@ -348,7 +452,7 @@ describe("ValoStudy MCP", () => {
     const response = await handleMcpRequest(request);
     const body = await response.json();
     expect(body.result.protocolVersion).toBe("2025-11-25");
-    expect(body.result.serverInfo).toEqual({ name: "valostudy", version: "1.2.0" });
+    expect(body.result.serverInfo).toEqual({ name: "valostudy", version: "1.3.0" });
     expect(body.result.capabilities).toEqual({ tools: { listChanged: false } });
   });
 
