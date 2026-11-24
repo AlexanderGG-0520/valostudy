@@ -42,9 +42,15 @@ Returns deterministic, ordered frame metadata pages for a completed public Study
 
 Returns one frame image as MCP image content and matching structured metadata. The client does not need to fetch the image URL separately.
 
+### get_frames
+
+Returns 1–16 original images (default 8) with a leading JSON text summary and ordered image/JSON metadata pairs. Specify either distinct `frame_names` in requested order or `count` with optional inclusive `start_ms` / `end_ms`. Range sampling uses actual ordered frame rows, includes endpoints for count >= 2, and uses the middle row for count = 1. Empty ranges, invalid names and unavailable Studies return bounded errors. At most four image reads run concurrently; the encoded image payload is capped at 5,000,000 base64 characters. Retry smaller batches when the cap is exceeded. No images are silently omitted.
+
+Example: `get_frames({study_id: "31f4c1b8ed3", start_ms: 60000, end_ms: 90000, count: 8})`.
+
 ## Safety annotation rationale
 
-All five tools currently publish the same annotations:
+All six tools currently publish the same annotations:
 
 - `readOnlyHint: true`: every tool only reads existing ValoStudy Study metadata or frame objects. No tool creates, updates, deletes, sends, queues, or publishes data.
 - `destructiveHint: false`: none of the tools can overwrite, delete, revoke, send, charge, or otherwise cause an irreversible user-visible change.
@@ -113,7 +119,9 @@ pnpm test
 pnpm build
 ```
 
-Then validate the deployed endpoint with MCP Inspector and ChatGPT developer mode. Exercise all five tools with representative valid and invalid inputs.
+Then validate the deployed endpoint with MCP Inspector and ChatGPT developer mode. Exercise all six tools with representative valid and invalid inputs.
+
+Additionally exercise get_frames with explicit names, timeline sampling, invalid arguments, and a smaller retry after a payload-budget error. Rescan the tool definitions after deploying the new version.
 
 Before submission:
 
