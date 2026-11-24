@@ -361,7 +361,7 @@ describe("ValoStudy MCP", () => {
 
   it("samples actual range rows evenly and includes endpoints", async () => {
     mockFrame("000001.jpg", 0, [0xff, 0xd8]);
-    mocks.buildPublicAiFramePage.mockImplementation(async (_id, offset: number) => ({
+    mocks.buildPublicAiFramePage.mockImplementation(async (_id: string, offset: number) => ({
       total: 11,
       frames: [{ name: String(101 + offset * 2).padStart(6, "0") + ".jpg" }],
     }));
@@ -381,7 +381,7 @@ describe("ValoStudy MCP", () => {
 
   it("uses the middle frame for count=1 and clamps count to available rows", async () => {
     mockFrame("000001.jpg", 0, [0xff, 0xd8]);
-    mocks.buildPublicAiFramePage.mockImplementation(async (_id, offset: number) => ({
+    mocks.buildPublicAiFramePage.mockImplementation(async (_id: string, offset: number) => ({
       total: 3,
       frames: [{ name: String(offset + 1).padStart(6, "0") + ".jpg" }],
     }));
