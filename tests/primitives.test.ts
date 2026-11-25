@@ -79,3 +79,24 @@ describe("object storage namespace and parts", () => {
     for (const part of [0, -1, 3, 1.5]) expect(() => partSize(PART_BYTES + 123, part)).toThrow();
   });
 });
+
+describe("League of Legends studies", () => {
+  const player = { game: "league_of_legends", rank: "Iron 4", champion: "Yone", role: "top", videoSettings: input.player.videoSettings, context: "Darius matchup" };
+  it("validates game-specific settings without requiring FPS sensitivity", () => {
+    const parsed = studyCreationSchema.parse({ ...input, player });
+    expect(parsed.player).toEqual(player);
+    expect(playerSettingsSchema.safeParse({ ...player, rank: "Radiant" }).success).toBe(false);
+    expect(playerSettingsSchema.safeParse({ ...player, role: "duelist" }).success).toBe(false);
+    expect(playerSettingsSchema.safeParse({ ...player, champion: "" }).success).toBe(false);
+    expect(playerSettingsSchema.safeParse({ ...input.player, rank: "Iron 4" }).success).toBe(false);
+  });
+  it("selects the League coaching snapshot and preserves legacy VALORANT behavior", () => {
+    const snapshot = renderSnapshot(studyCreationSchema.parse({ ...input, player }));
+    expect(snapshot.templateId).toBe("league-of-legends-coaching");
+    expect(snapshot.templateVersion).toBe("lol-v1");
+    expect(snapshot.prompt).toContain("Yone");
+    expect(snapshot.prompt).toContain("ウェーブ管理");
+    expect(renderSnapshot(input).templateId).toBe("valorant-coaching");
+    expect(manifestSchema.parse({ ...manifest, player }).player).toEqual(player);
+  });
+});

@@ -199,6 +199,7 @@ describe("ValoStudy MCP", () => {
       study_id: id,
       status: "completed",
       frame_count: 7072,
+      game: "valorant",
       canonical_schema_version: "1.1.0",
       frames_expired_at: null,
       timeline: {

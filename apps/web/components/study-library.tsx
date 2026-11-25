@@ -12,7 +12,7 @@ type StudyRow = {
   status: "pending" | "queued" | "processing" | "completed" | "failed";
   visibility: "private" | "public";
   plan: Plan;
-  player: { rank: string; context: string };
+  player: { rank: string; context: string; game?: "valorant" | "league_of_legends" };
   createdAt: string;
   completedAt: string | null;
   framesExpiredAt: string | null;
@@ -130,7 +130,7 @@ export function StudyLibrary() {
           />}
           <a href={`/${study.id}`}>
             <strong>Study {study.id}</strong>
-            <span>{study.player.rank} · {study.visibility} · {study.status}</span>
+            <span>{study.player.game === "league_of_legends" ? "LoL · " : ""}{study.player.rank} · {study.visibility} · {study.status}</span>
           </a>
           <div className="library-meta">
             <span>{shortDate(study.createdAt)}</span>

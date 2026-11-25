@@ -25,8 +25,8 @@ version from an application release.
 
 VCMR v1 contains the data ValoStudy can currently produce reliably:
 
-- Study identity, lifecycle state, visibility, and VALORANT game identity
-- player rank, sensitivity, video settings, and user coaching context
+- Study identity, lifecycle state, visibility, and game identity (`valorant` or `league_of_legends`)
+- player rank, game-specific settings (VALORANT sensitivity or League of Legends champion and role), video settings, and user coaching context
 - probed media width, height, and duration when available
 - fixed-rate sampling configuration and timestamp semantics
 - an explicit canonical timeline rooted at `video_start`
@@ -149,3 +149,5 @@ New detectors should write into VCMR concepts, not invent detector-specific API
 shapes. For example, an OCR kill-feed detector should eventually emit typed
 `events[]` entries referencing `evidenceFrameIds`. Model-specific payloads
 belong in adapters derived from VCMR, never in the canonical schema itself.
+
+League of Legends Studies use `player.game: "league_of_legends"`, `player.champion`, and `player.role`. Legacy VALORANT player objects omit `game` and remain valid. The shared fixed-rate timeline describes video time, not the in-game clock; round/event arrays are empty unless actual evidence exists. The selected coaching template is snapshotted at creation.

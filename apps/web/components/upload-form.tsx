@@ -74,6 +74,7 @@ async function browserVideoDuration(file: File): Promise<number | null> {
 
 export function UploadForm() {
   const { data: session, isPending } = authClient.useSession();
+  const [game, setGame] = useState<"valorant" | "league_of_legends">("valorant");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [studyUrl, setStudyUrl] = useState("");
@@ -187,10 +188,9 @@ export function UploadForm() {
       const input = studyCreationSchema.parse({
         player: {
           rank: data.get("rank"),
-          sensitivity: {
-            dpi: Number(data.get("dpi")),
-            inGame: Number(data.get("inGame")),
-          },
+          ...(game === "league_of_legends"
+            ? { game, champion: data.get("champion"), role: data.get("role") }
+            : { sensitivity: { dpi: Number(data.get("dpi")), inGame: Number(data.get("inGame")) } }),
           videoSettings: {
             resolution: data.get("resolution"),
             refreshHz: Number(data.get("refreshHz")),
@@ -355,15 +355,35 @@ export function UploadForm() {
           <p className="section-copy">センシ、描画設定、現在の課題まで。AIがプレイだけを見て誤読しないための前提情報です。</p>
         </div>
 
+        <label>
+          <span className="field-label">ゲームタイトル</span>
+          <select name="game" value={game} onChange={(event) => setGame(event.target.value === "league_of_legends" ? "league_of_legends" : "valorant")}>
+            <option value="valorant">VALORANT</option>
+            <option value="league_of_legends">League of Legends</option>
+          </select>
+        </label>
         <div className="field-grid two-columns">
           <label>
             <span className="field-label">現在のランク</span>
-            <select name="rank" defaultValue="Platinum 3">
-              {["Unranked", ...["Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ascendant", "Immortal"]
-                .flatMap((rank) => [1, 2, 3].map((division) => `${rank} ${division}`)), "Radiant"]
+            <select key={game} name="rank" defaultValue={game === "valorant" ? "Platinum 3" : "Unranked"}>
+              {(game === "valorant"
+                ? ["Unranked", ...["Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ascendant", "Immortal"].flatMap((rank) => [1, 2, 3].map((division) => `${rank} ${division}`)), "Radiant"]
+                : ["Unranked", ...["Iron", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Diamond"].flatMap((rank) => [4, 3, 2, 1].map((division) => `${rank} ${division}`)), "Master", "Grandmaster", "Challenger"])
                 .map((rank) => <option key={rank}>{rank}</option>)}
             </select>
           </label>
+          {game === "league_of_legends" ? <>
+            <label>
+              <span className="field-label">チャンピオン</span>
+              <input name="champion" required maxLength={80} placeholder="例: ヨネ" />
+            </label>
+            <label>
+              <span className="field-label">ロール</span>
+              <select name="role" defaultValue="top">
+                <option value="top">TOP</option><option value="jungle">JG</option><option value="mid">MID</option><option value="adc">ADC</option><option value="support">SUP</option>
+              </select>
+            </label>
+          </> : <>
           <label>
             <span className="field-label">DPI</span>
             <input name="dpi" type="number" min={50} max={64000} defaultValue={1600} required />
@@ -372,6 +392,7 @@ export function UploadForm() {
             <span className="field-label">ゲーム内センシ</span>
             <input name="inGame" type="number" min={0.001} max={20} step="any" defaultValue={0.1} required />
           </label>
+          </>}
           <label>
             <span className="field-label">解像度</span>
             <input name="resolution" defaultValue="1920x1080" required pattern="[1-9][0-9]{2,3}x[1-9][0-9]{2,3}" />
@@ -412,12 +433,12 @@ export function UploadForm() {
           />
         </label>
         <label>
-          <span className="field-label">マップ・エージェント・状況・見てほしい点</span>
+          <span className="field-label">{game === "valorant" ? "マップ・エージェント・状況・見てほしい点" : "対面・パッチ・試合情報・見てほしい点"}</span>
           <textarea
             name="context"
             rows={4}
             maxLength={6000}
-            placeholder="例: アセント / クローヴ。撃ち合い、クロスヘアプレイスメント、フラッシュ回避を重点的に見てほしい。"
+            placeholder={game === "valorant" ? "例: アセント / クローヴ。撃ち合い、クロスヘアプレイスメント、フラッシュ回避を重点的に見てほしい。" : "例: TOPヨネ vs ダリウス。Lv.3のソロキルとウェーブ管理、購入順を重点的に見てほしい。"}
           />
         </label>
       </fieldset>
