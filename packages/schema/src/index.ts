@@ -97,7 +97,11 @@ export const MAX_UPLOAD_PARTS = Math.ceil(MAX_UPLOAD_BYTES / PART_BYTES);
 export const MAX_VIDEO_SECONDS = PLAN_LIMITS.pro.maxVideoSeconds;
 export const MAX_EXTRACTED_FRAMES = PLAN_LIMITS.pro.maxFrames;
 
-export const playerSettingsSchema = z.object({
+export const gameSchema = z.enum(["valorant", "league_of_legends"]);
+export type Game = z.infer<typeof gameSchema>;
+
+const valorantPlayerSettingsSchema = z.object({
+  game: z.literal("valorant").optional(),
   rank: z.string().regex(/^(Unranked|Radiant|(Iron|Bronze|Silver|Gold|Platinum|Diamond|Ascendant|Immortal) [1-3])$/),
   sensitivity: z.object({ dpi: z.number().int().min(50).max(64000), inGame: z.number().positive().max(20) }),
   videoSettings: z.object({
@@ -110,6 +114,14 @@ export const playerSettingsSchema = z.object({
   }),
   context: z.string().max(6000).default(""),
 });
+
+export const leaguePlayerSettingsSchema = valorantPlayerSettingsSchema.omit({ game: true, rank: true, sensitivity: true }).extend({
+  game: z.literal("league_of_legends"),
+  rank: z.string().regex(/^(Unranked|Master|Grandmaster|Challenger|(Iron|Bronze|Silver|Gold|Platinum|Emerald|Diamond) [1-4])$/),
+  champion: z.string().trim().min(1).max(80),
+  role: z.enum(["top", "jungle", "mid", "adc", "support"]),
+});
+export const playerSettingsSchema = z.union([valorantPlayerSettingsSchema, leaguePlayerSettingsSchema]);
 
 export const samplingFpsSchema = z.union([
   z.literal(0.25),
@@ -434,7 +446,7 @@ export const vcmrMatchSchema = z.object({
   schemaVersion: z.literal(VCMR_SCHEMA_VERSION),
   study: z.object({
     id: studyIdSchema,
-    game: z.literal("valorant"),
+    game: gameSchema,
     visibility: z.enum(["private", "public"]),
     status: processingStatusSchema,
     createdAt: z.iso.datetime(),
@@ -459,6 +471,9 @@ export const vcmrMatchSchema = z.object({
     prompt: z.string().min(1),
   }),
 }).superRefine((value, ctx) => {
+  if (value.study.game !== (value.player.game ?? "valorant")) {
+    ctx.addIssue({ code: "custom", message: "Study game must match player settings", path: ["study", "game"] });
+  }
   validateFrameIdentity(value.frames, ctx);
   validateTemporalModel(value, ctx);
   for (let index = 0; index < value.frames.length; index += 1) {

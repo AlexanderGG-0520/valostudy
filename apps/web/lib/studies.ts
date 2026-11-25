@@ -3,7 +3,7 @@ import {
   eq, asc, and, desc, gte, lte, isNull, sql,
 } from "@valostudy/db";
 import { insertWithStudyId } from "@valostudy/db/id";
-import { template, renderSnapshot } from "@valostudy/prompts";
+import { selectTemplate, renderSnapshot } from "@valostudy/prompts";
 import {
   manifestSchema, vcmrMatchSchema, studyIdSchema, PLAN_LIMITS,
   VCMR_SCHEMA, VCMR_SCHEMA_VERSION, VCMR_TIMESTAMP_SEMANTICS,
@@ -26,6 +26,7 @@ export async function createStudy(ownerId: string, input: StudyCreation) {
   }
   assertPlanInput(plan, input);
 
+  const template = selectTemplate(input);
   const result = await db().transaction(async (tx) => {
     await tx.insert(promptTemplates).values({ ...template, createdAt: new Date(template.createdAt) }).onConflictDoNothing();
     const [savedTemplate] = await tx.select().from(promptTemplates)
@@ -105,7 +106,7 @@ export async function buildCanonicalMatch(id: string, viewerId?: string) {
     schemaVersion: VCMR_SCHEMA_VERSION,
     study: {
       id,
-      game: "valorant",
+      game: study.player.game ?? "valorant",
       visibility: study.visibility,
       status: study.status,
       createdAt: study.createdAt.toISOString(),
