@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 import { Queue } from "bullmq";
+import { Redis } from "ioredis";
 import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { manifestSchema, vcmrMatchSchema, PART_BYTES, type Manifest } from "@valostudy/schema";
 import { config, redisConnection, QUEUE_NAME } from "@valostudy/config";
@@ -11,10 +12,15 @@ import { input } from "../fixtures";
 const c = config();
 const video = process.env.E2E_VIDEO!;
 const sql = postgres(c.DATABASE_URL, { max: 2 });
-const queue = new Queue(QUEUE_NAME, { connection: redisConnection() });
+const redis = new Redis(redisConnection());
+const queue = new Queue(QUEUE_NAME, { connection: redis });
 const s3 = new S3Client({ endpoint: c.S3_ENDPOINT, region: c.S3_REGION, forcePathStyle: true,
   credentials: { accessKeyId: c.S3_ACCESS_KEY, secretAccessKey: c.S3_SECRET_KEY } });
-test.afterAll(async () => { await queue.close(); await sql.end(); s3.destroy(); });
+test.beforeAll(async () => { await queue.waitUntilReady(); });
+test.afterAll(async () => {
+  try { await queue.close(); }
+  finally { redis.disconnect(); await sql.end(); s3.destroy(); }
+});
 
 async function signup(page: Page) {
   await page.goto("/");

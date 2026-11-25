@@ -217,6 +217,9 @@ Tools:
 - `get_coaching_prompt(study_id)`
 - `list_frames(study_id, offset?, limit?, start_ms?, end_ms?)`: 最大240件ずつframe metadataを取得。canonical timelineの時間範囲で絞り込み可能
 - `get_frame(study_id, frame_name)`: object storageから画像を読み、MCP image contentとして直接返す
+- `get_frames(study_id, count?, start_ms?, end_ms?, frame_names?)`: 最大16枚（既定8枚）の実画像と各metadataを一括取得。時間範囲内を等間隔の行位置でサンプリングするか、`frame_names`で明示指定する（両方式は排他）。大きなレスポンスでは枚数を減らして再試行する。
+
+試合を複数の時間範囲に分けて `get_frames` で概観し、重要場面を狭い範囲で再取得すると、単一画像ツールの繰り返しを減らせます。既存の `get_frame` は変更ありません。
 
 `get_frame` は外部AIにframe URLを再fetchさせないため、Web crawler/search indexの到達性に依存しません。MCP endpointではowner sessionを使用しないためprivate Studyは公開されません。
 

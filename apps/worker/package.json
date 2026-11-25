@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "bullmq": "^6.7.8",
+    "ioredis": "^5.11.1",
     "@valostudy/config": "workspace:*",
     "@valostudy/db": "workspace:*",
     "@valostudy/schema": "workspace:*",

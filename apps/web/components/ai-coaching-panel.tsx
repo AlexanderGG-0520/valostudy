@@ -17,7 +17,9 @@ export function AiCoachingPanel({ studyId, mcpUrl, isPublic }: AiCoachingPanelPr
   const coachingPrompt = [
     `${studyId} をコーチングして。`,
     "get_studyでStudyを確認し、get_player_settingsとget_coaching_promptを読んだうえで、",
-    "list_frames/get_frameを使って試合の序盤・中盤・終盤を広く確認して分析して。",
+    "get_framesを使い、試合を複数の時間範囲に分けて各範囲を8〜16枚ずつサンプリングして。",
+    "重要場面はさらに狭い時間範囲でget_framesを繰り返し、必要に応じてlist_frames/get_frameも使って詳細を確認して。",
+    "実際に確認した画像枚数・時間範囲と未確認区間を明示して分析して。",
   ].join("");
 
   async function copy(value: string, kind: "mcp" | "prompt") {

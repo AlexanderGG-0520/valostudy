@@ -1,4 +1,5 @@
 import { Queue, Worker } from "bullmq";
+import { Redis } from "ioredis";
 import { db, jobs, studies, uploads, frames, usageEvents, eq, inArray, and, isNull, sql } from "@valostudy/db";
 import { PLAN_LIMITS } from "@valostudy/schema";
 import { config, redisConnection, QUEUE_NAME, log } from "@valostudy/config";
@@ -7,9 +8,11 @@ import { processVideo } from "./process";
 
 config();
 
-const queue = new Queue(QUEUE_NAME, { connection: redisConnection() });
+const queueRedis = new Redis(redisConnection());
+const workerRedis = new Redis(redisConnection());
+const queue = new Queue(QUEUE_NAME, { connection: queueRedis });
 const worker = new Worker(QUEUE_NAME, processVideo, {
-  connection: redisConnection(),
+  connection: workerRedis,
   concurrency: 1,
   maxStalledCount: 1,
 });
@@ -117,13 +120,19 @@ async function tick() {
   if (!stopping) timer = setTimeout(tick, 10000);
 }
 
+await Promise.all([queue.waitUntilReady(), worker.waitUntilReady()]);
 void tick();
 
 async function shutdown() {
   stopping = true;
   if (timer) clearTimeout(timer);
-  await worker.close();
-  await queue.close();
+  try {
+    await worker.close();
+    await queue.close();
+  } finally {
+    workerRedis.disconnect();
+    queueRedis.disconnect();
+  }
   process.exit(0);
 }
 
