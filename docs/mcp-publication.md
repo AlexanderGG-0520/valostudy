@@ -44,7 +44,7 @@ Returns one frame image as MCP image content and matching structured metadata. T
 
 ### get_frames
 
-Returns 1–16 original images (default 8) with a leading JSON text summary and ordered image/JSON metadata pairs. Specify either distinct `frame_names` in requested order or `count` with optional inclusive `start_ms` / `end_ms`. Range sampling uses actual ordered frame rows, includes endpoints for count >= 2, and uses the middle row for count = 1. Empty ranges, invalid names and unavailable Studies return bounded errors. At most four image reads run concurrently; the encoded image payload is capped at 5,000,000 base64 characters. Retry smaller batches when the cap is exceeded. No images are silently omitted.
+Returns 1–16 actual images (default 8) with a leading JSON text summary and ordered image/JSON metadata pairs. Specify either distinct `frame_names` in requested order or `count` with optional inclusive `start_ms` / `end_ms`. Range sampling uses actual ordered frame rows, includes endpoints for count >= 2, and uses the middle row for count = 1. Empty ranges, invalid names and unavailable Studies return bounded errors. At most four image reads run concurrently; the encoded image payload is capped at 5,000,000 base64 characters. The budget is divided across selected frames; original bytes are preserved when they fit, otherwise JPEG quality and then resolution are reduced automatically. Compressed image metadata includes `image_variant: "compressed"` and `original_mime_type`; `url` continues to identify the original evidence. `get_frame` always returns original bytes. Retry smaller batches only if compression cannot fit the cap. No images are silently omitted.
 
 Example: `get_frames({study_id: "31f4c1b8ed3", start_ms: 60000, end_ms: 90000, count: 8})`.
 
@@ -121,7 +121,7 @@ pnpm build
 
 Then validate the deployed endpoint with MCP Inspector and ChatGPT developer mode. Exercise all six tools with representative valid and invalid inputs.
 
-Additionally exercise get_frames with explicit names, timeline sampling, invalid arguments, and a smaller retry after a payload-budget error. Rescan the tool definitions after deploying the new version.
+Additionally exercise get_frames with explicit names, timeline sampling, invalid arguments, and automatic compression of oversized batches, original-byte preservation for get_frame, and a smaller retry after an uncompressible payload-budget error. Rescan the tool definitions after deploying the new version.
 
 Before submission:
 

@@ -22,7 +22,8 @@
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.7.1",
     "@radix-ui/react-slot": "^1.5.0",
-    "@better-auth/passkey": "1.7.26"
+    "@better-auth/passkey": "1.7.26",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.5",
