@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 
 const id = "31f4c1b8ed3";
 const mocks = vi.hoisted(() => ({
@@ -152,7 +153,7 @@ describe("ValoStudy MCP", () => {
     expect(body.result.resultType).toBe("complete");
     expect(body.result._meta["io.modelcontextprotocol/serverInfo"]).toEqual({
       name: "valostudy",
-      version: "1.3.0",
+      version: "1.3.1",
     });
   });
 
@@ -423,7 +424,43 @@ describe("ValoStudy MCP", () => {
     },
   );
 
-  it("returns an actionable error rather than partial images when the response budget is exceeded", async () => {
+  it("fits sixteen oversized real JPEG frames within the image budget without changing single-frame evidence", async () => {
+    const width = 1920, height = 1080;
+    const raw = Buffer.alloc(width * height * 3);
+    let random = 123456789;
+    for (let i = 0; i < raw.length; i++) {
+      random ^= random << 13; random ^= random >>> 17; random ^= random << 5;
+      raw[i] = random & 255;
+    }
+    const original = await sharp(raw, { raw: { width, height, channels: 3 } })
+      .jpeg({ quality: 95 }).toBuffer();
+    expect(original.toString("base64").length * 16).toBeGreaterThan(5_000_000);
+    mockFrame("000001.jpg", 0, []);
+    mocks.storageGet.mockResolvedValue({
+      Body: { transformToByteArray: async () => original },
+    });
+    const names = Array.from({ length: 16 }, (_, i) => String(i + 1).padStart(6, "0") + ".jpg");
+    const body = await (await handleMcpRequest(batchRequest({ frame_names: names }))).json();
+    expect(body.result.isError).toBeUndefined();
+    expect(JSON.parse(body.result.content[0].text).frame_names).toEqual(names);
+    const images = body.result.content.filter((item: { type: string }) => item.type === "image");
+    expect(images).toHaveLength(16);
+    expect(images.reduce((n: number, item: { data: string }) => n + item.data.length, 0)).toBeLessThanOrEqual(5_000_000);
+    for (let i = 0; i < images.length; i++) {
+      expect(images[i].mimeType).toBe("image/jpeg");
+      expect((await sharp(Buffer.from(images[i].data, "base64")).metadata()).format).toBe("jpeg");
+      expect(JSON.parse(body.result.content[2 + i * 2].text)).toMatchObject({
+        frame_name: names[i], image_variant: "compressed", original_mime_type: "image/jpeg",
+      });
+    }
+    const single = await (await handleMcpRequest(modernRequest("tools/call", {
+      name: "get_frame", arguments: { study_id: id, frame_name: names[0] },
+    }, "get_frame"))).json();
+    expect(single.result.content[0].data).toBe(original.toString("base64"));
+    expect(JSON.parse(single.result.content[1].text).image_variant).toBeUndefined();
+  });
+
+  it("returns an actionable error rather than partial images when an oversized image cannot be compressed", async () => {
     mockFrame("000001.jpg", 0, [0xff, 0xd8]);
     mocks.storageGet.mockResolvedValue({
       Body: { transformToByteArray: async () => new Uint8Array(2_000_000) },
@@ -453,7 +490,7 @@ describe("ValoStudy MCP", () => {
     const response = await handleMcpRequest(request);
     const body = await response.json();
     expect(body.result.protocolVersion).toBe("2025-11-25");
-    expect(body.result.serverInfo).toEqual({ name: "valostudy", version: "1.3.0" });
+    expect(body.result.serverInfo).toEqual({ name: "valostudy", version: "1.3.1" });
     expect(body.result.capabilities).toEqual({ tools: { listChanged: false } });
   });
 

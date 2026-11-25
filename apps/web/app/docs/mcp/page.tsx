@@ -42,7 +42,7 @@ export default function McpDocsPage() {
 
     <section className="docs-content-card">
       <h2>Tools</h2>
-      <p>get_frames は count（既定8、最大16）と任意の start_ms / end_ms、または frame_names を指定します。画像サイズの上限に達した場合は枚数を減らして再試行してください。</p>
+      <p>get_frames は count（既定8、最大16）と任意の start_ms / end_ms、または frame_names を指定します。画像サイズが上限を超える場合は自動でJPEG品質・解像度を調整します。細部の確認には原画像を返す get_frame を使い、圧縮でも収まらない場合は枚数を減らしてください。</p>
       <div className="endpoint-list">
         {tools.map(([name, description]) => <div key={name}>
           <code>TOOL</code>
