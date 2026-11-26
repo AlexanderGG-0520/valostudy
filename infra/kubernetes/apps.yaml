@@ -13,7 +13,10 @@ data:
   STRIPE_PRO_PRICE_ID: price_1Ug15YCayyBPffbkhiksTbWM
   STRIPE_LEGACY_PLUS_PRICE_ID: price_1UICnRCayyBPffbkWigjXCmL
   STRIPE_LEGACY_PRO_PRICE_ID: price_1UICouCayyBPffbkTpTZwjTX
-  # New Payment Links and Coach Price ID are pending; do not reuse the old URLs.
+  STRIPE_COACH_PRICE_ID: price_1Ug1FDCayyBPffbkAgB4RpeF
+  STRIPE_PLUS_PAYMENT_LINK_URL: https://buy.stripe.com/6oUdR8cAM90L3Xt4AI9IQ06
+  STRIPE_PRO_PAYMENT_LINK_URL: https://buy.stripe.com/14A7sK44gel5dy3c3a9IQ09
+  STRIPE_COACH_PAYMENT_LINK_URL: https://buy.stripe.com/fZu5kC9oAgtdctZ7MU9IQ08
   # Stripe API keys and webhook secrets remain in valostudy-secrets.
   WORKER_FFMPEG_THREADS: "4"
   WORKER_FFMPEG_PROCESSES: "2"
