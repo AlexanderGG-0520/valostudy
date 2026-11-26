@@ -11,8 +11,10 @@ vi.mock("@valostudy/config", () => ({
     STRIPE_SECRET_KEY: "sk_test_placeholder",
     STRIPE_PLUS_PRICE_ID: "price_plus",
     STRIPE_PRO_PRICE_ID: "price_pro",
+    STRIPE_COACH_PRICE_ID: "price_coach",
     STRIPE_PLUS_PAYMENT_LINK_URL: "https://buy.stripe.com/plus_test",
     STRIPE_PRO_PAYMENT_LINK_URL: "https://buy.stripe.com/pro_test",
+    STRIPE_COACH_PAYMENT_LINK_URL: "https://buy.stripe.com/coach_test",
     BETTER_AUTH_URL: "http://localhost:3000",
   }),
 }));
@@ -59,6 +61,13 @@ describe("Stripe Payment Links", () => {
       plan: "pro",
     }));
     expect(`${url.origin}${url.pathname}`).toBe("https://buy.stripe.com/pro_test");
+  });
+  it("uses the configured Coach link and records a Coach intent", async () => {
+    const url = new URL(await createPaymentLinkCheckout({
+      userId: "user-123", email: "player@example.test", plan: "coach",
+    }));
+    expect(`${url.origin}${url.pathname}`).toBe("https://buy.stripe.com/coach_test");
+    expect(state.values).toHaveBeenCalledWith(expect.objectContaining({ plan: "coach" }));
   });
 });
 

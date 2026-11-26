@@ -104,9 +104,9 @@ aws --endpoint-url "$S3_ENDPOINT" s3api get-bucket-cors \
 | S3_ACCESS_KEY / S3_SECRET_KEY | S3互換credential。R2ではManage R2 API tokensが表示するAccess Key ID / Secret Access Keyを使用（一般API token値は不可） |
 | STRIPE_SECRET_KEY | Stripe server secret key |
 | STRIPE_WEBHOOK_SECRET | `/api/billing/webhook` の署名検証secret |
-| STRIPE_PLUS_PAYMENT_LINK_URL | Plus用Payment Link。既定値は `https://buy.stripe.com/5kQbJ0gR2fp9alR1ow9IQ04` |
-| STRIPE_PRO_PAYMENT_LINK_URL | Pro用Payment Link。既定値は `https://buy.stripe.com/cNi6oG58k1yj3Xtd7e9IQ05` |
-| STRIPE_PLUS_PRICE_ID / STRIPE_PRO_PRICE_ID | 旧Checkout Sessionやsubscription metadataからのplan判定用。Payment Link新規購入では必須ではない |
+| STRIPE_PLUS_PAYMENT_LINK_URL / STRIPE_PRO_PAYMENT_LINK_URL / STRIPE_COACH_PAYMENT_LINK_URL | 各新価格のPayment Link。未設定時は購入不可 |
+| STRIPE_PLUS_PRICE_ID / STRIPE_PRO_PRICE_ID / STRIPE_COACH_PRICE_ID | 各新価格のPrice ID。購入・権限判定に必須 |
+| STRIPE_LEGACY_PLUS_PRICE_ID / STRIPE_LEGACY_PRO_PRICE_ID | 既存契約のPrice ID。旧ProはCoachへ対応 |
 
 R2 endpointでは設定をfail-fast検証し、region=auto、32文字のAccess Key ID、64文字のSecret Access Key以外は外部リクエスト前に拒否します。
 
@@ -118,24 +118,25 @@ R2 endpointでは設定をfail-fast検証し、region=auto、32文字のAccess K
 | Plan | Study limit | Video / upload | Sampling | Frame retention | Paid features | Queue |
 |---|---|---|---|---|---|---|
 | Free | 1 Studyごとに6時間cooldown | 2h / 16GiB | 最大1 FPS / 7,200 frames | 30日 | 基本Study / Public・Private | Standard |
-| Plus ($20/月) | 30 Studies / rolling 7 days | 2h / 32GiB | 最大2 FPS / 14,400 frames | 1年 | 最大20 Studyの横断比較 | Priority |
-| Pro ($200/月) | UI上Unlimited（fair-use保護あり） | 4h / 64GiB | 最大5 FPS / 72,000 frames | 期限なし | 最大100 Study比較 + Coach Workspace（100 clients）+ Bearer API | Highest |
+| Plus ($4.99/月) | 15 Studies / rolling 7 days | 2h / 32GiB | 最大2 FPS / 14,400 frames | 1年 | 最大10 Study比較 | Priority |
+| Pro ($12.99/月) | 60 Studies / rolling 7 days | 4h / 64GiB | 最大5 FPS / 72,000 frames | 1年 | 最大50 Study比較 + Bearer API | Higher |
+| Coach ($49.99/月) | UI上Unlimited（fair-use保護あり、500/7日） | 4h / 64GiB | 最大5 FPS / 72,000 frames | 期限なし | 最大100 Study比較 + Coach Workspace（100 clients）+ Bearer API | Highest |
 
-FreeのcooldownとPlus/Proのrolling quotaは、Study作成ボタンではなくmultipart uploadが正常完了してprocessingへ投入される時点で消費します。アップロード途中の失敗では消費しません。Workerが最終的に動画を処理できなかった場合はusage eventをreleaseするため、利用枠が戻ります。同一ユーザーのcompleteはPostgreSQL row lockで直列化し、並行requestによるquota超過を防ぎます。
+FreeのcooldownとPlus/Pro/Coachのrolling quotaは、Study作成ボタンではなくmultipart uploadが正常完了してprocessingへ投入される時点で消費します。アップロード途中の失敗では消費しません。Workerが最終的に動画を処理できなかった場合はusage eventをreleaseするため、利用枠が戻ります。同一ユーザーのcompleteはPostgreSQL row lockで直列化し、並行requestによるquota超過を防ぎます。
 
 `POST /api/billing/checkout` は新しいCheckout Sessionを自前生成せず、既存のStripe Payment Linkへ認証済みユーザーを送ります。serverは24時間有効のopaque checkout intentをDBへ作り、そのIDをPayment Linkの `client_reference_id` として渡し、emailもprefillします。Customer Portalは `POST /api/billing/portal`、状態表示は `GET /api/billing/status`。Webhookは `POST /api/billing/webhook` でraw bodyと `Stripe-Signature` をHMAC検証し、event IDをDBへ保存して冪等処理します。
 
-新規購入は既存Payment Linkを使用します。Webhookの `checkout.session.completed` ではCheckout Sessionの `payment_link` をStripe APIから再取得し、checkout intentが要求したPlus/Proの設定済みURLと一致することをserver-sideで検証してからentitlementを紐付けます。これによりclient側でPlus/Proのリンクを差し替えて安いプランの支払いで上位権限を得ることを防ぎます。subscription eventがCheckout完了より先に到着しても、Checkout完了時にStripeからsubscription状態を再取得するためevent順序に依存しません。Customer Portalでsubscription cancellationとPlus/Pro間のplan changeを許可してください。既にpaid subscriptionがあるユーザーのplan変更は二重subscription防止のためPayment LinkではなくPortalへ送ります。
+新規購入は新しい各Payment Linkを使用します。リンクのURLに加え、実際のsubscriptionの単一Price IDとcustomerを検証します。Webhookの `checkout.session.completed` ではCheckout Sessionの `payment_link` をStripe APIから再取得し、checkout intentが要求したPlus/Pro/Coachの設定済みURLと一致することをserver-sideで検証してからentitlementを紐付けます。これによりclient側でPlus/Pro/Coachのリンクを差し替えて安いプランの支払いで上位権限を得ることを防ぎます。subscription eventがCheckout完了より先に到着しても、Checkout完了時にStripeからsubscription状態を再取得するためevent順序に依存しません。Customer Portalでsubscription cancellationとPlus/Pro/Coach間のplan changeを許可してください。既にpaid subscriptionがあるユーザーのplan変更は二重subscription防止のためPayment LinkではなくPortalへ送ります。
 
-開発者アカウントにはserver-sideのbuilt-in Pro entitlementを適用できます。対象emailは正規化後のSHA-256で照合するため、plaintextの開発者emailはrepositoryへ保存しません。Developer entitlementはStripe Checkoutを要求せず、通常のPro制限・Coach Workspace・Bearer API権限をそのまま使用します。
+開発者アカウントにはserver-sideのbuilt-in Coach entitlementを適用できます。対象emailは正規化後のSHA-256で照合するため、plaintextの開発者emailはrepositoryへ保存しません。Developer entitlementはStripe Checkoutを要求せず、通常のCoach制限・Coach Workspace・Bearer API権限をそのまま使用します。
 
 ### Paid analysis features
 
-Plus / Proではログイン中のStudy Libraryからcompleted Studyを複数選択してcomparisonを作成できます。Plusは最大20件、Proは最大100件です。comparisonは `/compare/{id}` と `/compare/{id}/manifest.json` を持ち、AIへ複数試合を1つの長期 evidence setとして渡せます。public comparisonはpublic Studyだけから作成でき、private comparisonはowner sessionが必要です。
+Plus / Pro / Coachではログイン中のStudy Libraryからcompleted Studyを複数選択してcomparisonを作成できます。Plusは最大10件、Proは最大50件、Coachは最大100件です。comparisonは `/compare/{id}` と `/compare/{id}/manifest.json` を持ち、AIへ複数試合を1つの長期 evidence setとして渡せます。public comparisonはpublic Studyだけから作成でき、private comparisonはowner sessionが必要です。
 
-Proでは最大5個のBearer API keyを発行できます。secretは発行時に一度だけ表示し、DBにはSHA-256 hashと表示用prefixだけを保存します。revoked keyやPro subscriptionが失効したkeyは認証に使えません。
+Pro / Coachでは最大5個のBearer API keyを発行できます。secretは発行時に一度だけ表示し、DBにはSHA-256 hashと表示用prefixだけを保存します。revoked keyやPro / Coach subscriptionが失効したkeyは認証に使えません。
 
-ProのCoach Workspaceでは最大100 clientを作成し、ownerが保持するcompleted Studyをplayer/client単位で割り当てられます。`/clients/{id}` と `/clients/{id}/manifest.json` がそのプレイヤーのlongitudinal coaching historyになり、元Studyを削除・複製せずに継続的な改善履歴としてAIへ渡せます。Client削除時は割当だけcascadeし、Study本体は残ります。
+CoachのCoach Workspaceでは最大100 clientを作成し、ownerが保持するcompleted Studyをplayer/client単位で割り当てられます。`/clients/{id}` と `/clients/{id}/manifest.json` がそのプレイヤーのlongitudinal coaching historyになり、元Studyを削除・複製せずに継続的な改善履歴としてAIへ渡せます。Client削除時は割当だけcascadeし、Study本体は残ります。
 
 ```bash
 curl -H "Authorization: Bearer vsk_..." \
@@ -238,7 +239,7 @@ Example endpoint: `https://valostudy.example.com/mcp`
 
 上限はplan snapshotで決まり、Freeは16GiB/2時間/1 FPS、Plusは32GiB/2時間/2 FPS、Proは64GiB/4時間/5 FPSです。録画全体を0.25/0.5/1/2/5 FPSでサンプリングし、最大frame数もplanごとに7,200/14,400/72,000枚へ制限します。Web UIの既定値は0.5 FPS（2秒ごと）。FFprobeは60秒、downloadは2時間、FFmpegは動画尺の最大2倍（最低30分・上限6時間）のtimeoutです。shellを使わず検証済みの引数配列を渡します。入力はローカルのMP4/MOV、MKV/WebM、AVIに制限し、ネットワークplaylistを受け付けません。timestampMsはサンプリング時刻の目安で、厳密な元フレームPTSではありません。
 
-Studyはpending → queued → processing → completed / failed。DB jobのpendingは投入待ちです。dispatcher再起動後に未投入・stalled jobを回収します。Queue priorityはFree/Plus/Proで段階化しています。completed frameはFree 30日、Plus 1年でWorkerがobject storageとDBから削除し、Study metadataとprompt snapshotは残します。Pro frameには自動expiryを設定しません。
+Studyはpending → queued → processing → completed / failed。DB jobのpendingは投入待ちです。dispatcher再起動後に未投入・stalled jobを回収します。Queue priorityはFree/Plus/Pro/Coachで段階化しています。completed frameはFree 30日、Plus / Pro 1年でWorkerがobject storageとDBから削除し、Study metadataとprompt snapshotは残します。Coach frameには自動expiryを設定しません。
 
 ## Prompt snapshots / Reddit research
 
@@ -262,12 +263,12 @@ WebはNext standalone、WorkerはFFmpeg入りNode image。Workerはworkspace Typ
 JSON logsにstudyId、jobId、stage、duration、frameCount、retryCount、error reasonを付与します。OpenTelemetry、Prometheus、Grafana、Lokiのexporter/dashboardは未実装です。
 
 - Better Authのemail/password登録・ログインとowner認可を実装。email verification、password reset、OAuth、MFA、分散rate limitは未実装。
-- Free/Plus/Pro quota、Stripe subscription、frame retentionは実装済み。WAFとbucket lifecycleの自動設定は未実装。
-- Study LibraryとPlus/Pro comparisonは実装済み。公開範囲変更、削除UI、失効・期限付き共有、frame選択、再処理UIは未実装。
+- Free/Plus/Pro/Coach quota、Stripe subscription、frame retentionは実装済み。WAFとbucket lifecycleの自動設定は未実装。
+- Study LibraryとPlus/Pro/Coach comparisonは実装済み。公開範囲変更、削除UI、失効・期限付き共有、frame選択、再処理UIは未実装。
 - ページ再読込後のupload再開、complete通知のUI再試行は未実装。中断multipartは4時間後に回収。
 - 作成途中のクラッシュで残るpending Study、DB未記録multipartの完全回収は未実装。frame保持期限はWorkerが処理します。元動画は正常完了または最終失敗時にWorkerが削除し、bucket lifecycleは異常終了時の補完として必要です。
 - FFmpeg専用sandbox/network policy、DB/queue readiness、アラート、queue retentionは追加対象。health endpointは生存確認のみ。
-- Proのread-only Bearer API、長期Study比較、単一アカウント向けCoach Workspaceは実装済み。高度なCV、OCR、音声解析、自動コーチングAI、adaptive sampling、team invite / multi-seat RBAC、batch uploadは未実装。
+- Pro / Coachのread-only Bearer API、長期Study比較、Coach限定の単一アカウント向けWorkspaceは実装済み。高度なCV、OCR、音声解析、自動コーチングAI、adaptive sampling、team invite / multi-seat RBAC、batch uploadは未実装。
 - 旧FastAPI/SQLiteからのデータmigrationはありません。旧実装はGit commit `d8c6a13` に残っています。
 
 ## References / license
@@ -278,3 +279,10 @@ JSON logsにstudyId、jobId、stage、duration、frameCount、retryCount、error
 [BullMQ stalled jobs](https://docs.bullmq.io/guide/jobs/stalled)
 
 本プロジェクトはAGPL-3.0-only [LICENSE](LICENSE)で公開しています。
+
+### 価格改定のStripe切替手順
+
+1. 旧Payment Linkを停止し、旧Price IDを保存する。新規購入用にUSD月額4.99 / 12.99 / 49.99の新しいPriceとPayment LinkをStripeで作成する。各リンクは対応する単一のサブスクリプションPriceに限定する。
+2. 新しい3組の環境変数と旧2 Price IDをSecretまたは環境設定に投入し、Customer Portalで新しい3価格への変更・解約を許可する。旧価格への新規変更は禁止する。
+3. migration 0007で既存Pro契約・Study・usageをCoachへ移す。課金額は自動変更しない。旧未完了checkout intentは失効する。既存契約の金額変更は通知と同意・運用手順に沿ってStripe側で別途行う。
+4. Stripe test modeで各プランの購入・Portal変更・Webhook・解約を確認してから本番に反映する。

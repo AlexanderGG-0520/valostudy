@@ -296,8 +296,16 @@ export async function processStripeEvent(payload: unknown) {
         const [existing] = await tx.select().from(billingSubscriptions)
           .where(eq(billingSubscriptions.stripeCustomerId, customerId));
         if (!userId) userId = existing?.userId;
-        if (!plan && existing?.stripeSubscriptionId === subscription.id && existing.plan !== "free")
-          plan = existing.plan;
+        if (!plan && existing?.stripeSubscriptionId === subscription.id && existing.plan !== "free") {
+          // Preserve cancellation handling for a known subscription. Unknown prices
+          // on an active update must not continue granting a higher paid entitlement.
+          if (event.type === "customer.subscription.deleted") plan = existing.plan;
+          else {
+            await tx.update(billingSubscriptions).set({ status: "inactive", updatedAt: new Date() })
+              .where(eq(billingSubscriptions.userId, existing.userId));
+            return { duplicate: false, ignored: true };
+          }
+        }
       }
       if (userId && customerId && plan) {
         await tx.insert(billingSubscriptions).values({

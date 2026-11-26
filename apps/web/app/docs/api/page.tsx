@@ -4,7 +4,7 @@ const endpoints = [
   ["GET", "/api/v1/studies", "自分が所有するStudy一覧"],
   ["GET", "/api/v1/studies/:id/manifest", "自分のStudyのprivate manifest"],
   ["GET", "/api/v1/studies/:id/canonical", "自分のStudyのVCMR canonical representation"],
-  ["GET", "/api/v1/clients", "Coach Workspaceのclient一覧"],
+  ["GET", "/api/v1/clients", "Coach限定のCoach Workspaceのclient一覧"],
   ["GET", "/api/v1/clients/:id/manifest", "clientに紐づくStudy manifest"],
 ] as const;
 
@@ -18,7 +18,7 @@ export default function ApiDocsPage() {
       <p className="section-index">BEARER REST API</p>
       <h1>外部ツールからStudyを読む。</h1>
       <p>
-        Pro向けのread-only APIです。ValoStudyで発行したAPI keyをAuthorizationヘッダーに渡し、
+        Pro / Coach向けのread-only APIです。ValoStudyで発行したAPI keyをAuthorizationヘッダーに渡し、
         自分のStudyやCoach Workspaceを自動化ワークフローから取得できます。
       </p>
     </header>

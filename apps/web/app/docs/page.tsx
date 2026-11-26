@@ -11,7 +11,7 @@ const docs = [
     href: "/docs/api",
     kicker: "PRO AUTOMATION",
     title: "Bearer REST API",
-    body: "Proユーザー向けのread-only API。自分のStudyとCoach Workspaceを外部ツールから取得できます。",
+    body: "Pro / Coachユーザー向けのread-only API。自分のStudyと（Coach限定の）Coach Workspaceを外部ツールから取得できます。",
   },
   {
     href: "/docs/canonical-schema",
@@ -31,7 +31,7 @@ export default function DeveloperDocsPage() {
       <p className="section-index">BUILD ON VALOSTUDY</p>
       <h1>Developer Docs</h1>
       <p>
-        AIクライアントとの接続から、Pro向けBearer API、VCMR canonical dataまで。
+        AIクライアントとの接続から、Pro / Coach向けBearer API、VCMR canonical dataまで。
         ValoStudyを外部ワークフローの互換レイヤーとして使うための入口です。
       </p>
     </header>

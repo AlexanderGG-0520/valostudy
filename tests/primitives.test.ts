@@ -41,8 +41,13 @@ describe("shared validation", () => {
     expect(studyCreationSchema.safeParse({ ...input, processing: { fps: 5 } }).success).toBe(true);
     expect(studyCreationSchema.safeParse({ ...input, processing: { fps: 3 } }).success).toBe(false);
     expect(PLAN_LIMITS.free.cooldownHours).toBe(6);
-    expect(PLAN_LIMITS.plus.rollingStudyLimit).toBe(30);
-    expect(PLAN_LIMITS.pro.publicStudyLimitLabel).toContain("Unlimited");
+    expect(PLAN_LIMITS.plus.rollingStudyLimit).toBe(15);
+    expect(PLAN_LIMITS.pro.rollingStudyLimit).toBe(60);
+    expect(PLAN_LIMITS.pro.clientLimit).toBe(0);
+    expect(PLAN_LIMITS.coach.publicStudyLimitLabel).toContain("Unlimited");
+    expect(PLAN_LIMITS.coach.clientLimit).toBe(100);
+    expect(PLAN_LIMITS.pro.apiAccess).toBe(true);
+    expect(PLAN_LIMITS.coach.apiAccess).toBe(true);
     expect(processingJobSchema.safeParse({ studyId: id, sourceObjectKey: sourceKey("00000000000"), options: input.processing }).success).toBe(false);
   });
 });

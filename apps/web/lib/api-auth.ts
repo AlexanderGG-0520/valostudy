@@ -11,7 +11,7 @@ function hashKey(value: string) {
 export async function createApiKey(userId: string, name: string) {
   const entitlement = await billingStatus(userId);
   if (!PLAN_LIMITS[entitlement.plan].apiAccess)
-    throw new HttpError(403, "API access requires Pro");
+    throw new HttpError(403, "API access requires Pro or Coach");
 
   const existing = await db().select({ id: apiKeys.id }).from(apiKeys).where(and(
     eq(apiKeys.userId, userId),
@@ -71,7 +71,7 @@ export async function apiOwner(request: Request) {
 
   const entitlement = await billingStatus(key.userId);
   if (!PLAN_LIMITS[entitlement.plan].apiAccess)
-    throw new HttpError(403, "API access requires an active Pro subscription");
+    throw new HttpError(403, "API access requires an active Pro or Coach subscription");
 
   await db().update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, key.id));
   return key.userId;

@@ -8,8 +8,7 @@ data:
   S3_ENDPOINT: https://f74f93d265d7e4bd911aa44934795ab6.r2.cloudflarestorage.com
   S3_REGION: auto
   S3_BUCKET: valostudy
-  STRIPE_PLUS_PAYMENT_LINK_URL: https://buy.stripe.com/5kQbJ0gR2fp9alR1ow9IQ04
-  STRIPE_PRO_PAYMENT_LINK_URL: https://buy.stripe.com/cNi6oG58k1yj3Xtd7e9IQ05
+  # Stripe Price IDs and Payment Links are supplied by valostudy-secrets.
   WORKER_FFMPEG_THREADS: "4"
   WORKER_FFMPEG_PROCESSES: "2"
   WORKER_FRAME_UPLOAD_CONCURRENCY: "8"
