@@ -80,7 +80,7 @@ export const studies = pgTable("studies", {
   ownerId: text("owner_id").notNull().references(() => user.id),
   visibility: text("visibility", { enum: ["private", "public"] }).notNull().default("private"),
   status: text("status", { enum: ["pending", "queued", "processing", "completed", "failed"] }).notNull().default("pending"),
-  plan: text("plan", { enum: ["free", "plus", "pro"] }).$type<Plan>().notNull().default("free"),
+  plan: text("plan", { enum: ["free", "plus", "pro", "coach"] }).$type<Plan>().notNull().default("free"),
   player: jsonb("player").$type<PlayerSettings>().notNull(),
   options: jsonb("options").$type<ProcessingOptions>().notNull(),
   createdAt: time("created_at").notNull().defaultNow(),
@@ -91,7 +91,7 @@ export const studies = pgTable("studies", {
   check("study_id_format", sql`${t.id} ~ '^[0-9a-f]{11}$'`),
   check("study_visibility", sql`${t.visibility} in ('private','public')`),
   check("study_status", sql`${t.status} in ('pending','queued','processing','completed','failed')`),
-  check("study_plan", sql`${t.plan} in ('free','plus','pro')`),
+  check("study_plan", sql`${t.plan} in ('free','plus','pro','coach')`),
   index("studies_retention_idx").on(t.retentionUntil),
 ]);
 
@@ -128,11 +128,11 @@ export const frames = pgTable("extracted_frames", {
 export const usageEvents = pgTable("study_usage_events", {
   studyId: text("study_id").primaryKey().references(() => studies.id, { onDelete: "cascade" }),
   ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  plan: text("plan", { enum: ["free", "plus", "pro"] }).$type<Plan>().notNull(),
+  plan: text("plan", { enum: ["free", "plus", "pro", "coach"] }).$type<Plan>().notNull(),
   consumedAt: time("consumed_at").notNull().defaultNow(),
   releasedAt: time("released_at"),
 }, (t) => [
-  check("study_usage_plan", sql`${t.plan} in ('free','plus','pro')`),
+  check("study_usage_plan", sql`${t.plan} in ('free','plus','pro','coach')`),
   index("study_usage_owner_consumed_idx").on(t.ownerId, t.consumedAt),
 ]);
 
@@ -140,13 +140,13 @@ export const billingSubscriptions = pgTable("billing_subscriptions", {
   userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
   stripeCustomerId: text("stripe_customer_id").unique(),
   stripeSubscriptionId: text("stripe_subscription_id").unique(),
-  plan: text("plan", { enum: ["free", "plus", "pro"] }).$type<Plan>().notNull().default("free"),
+  plan: text("plan", { enum: ["free", "plus", "pro", "coach"] }).$type<Plan>().notNull().default("free"),
   status: text("status").notNull().default("inactive"),
   currentPeriodEnd: time("current_period_end"),
   cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
   updatedAt: time("updated_at").notNull().defaultNow(),
 }, (t) => [
-  check("billing_plan", sql`${t.plan} in ('free','plus','pro')`),
+  check("billing_plan", sql`${t.plan} in ('free','plus','pro','coach')`),
 ]);
 
 export const stripeEvents = pgTable("stripe_events", {
@@ -158,12 +158,12 @@ export const stripeEvents = pgTable("stripe_events", {
 export const billingCheckoutIntents = pgTable("billing_checkout_intents", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  plan: text("plan", { enum: ["plus", "pro"] }).$type<Exclude<Plan, "free">>().notNull(),
+  plan: text("plan", { enum: ["plus", "pro", "coach"] }).$type<Exclude<Plan, "free">>().notNull(),
   createdAt: time("created_at").notNull().defaultNow(),
   expiresAt: time("expires_at").notNull(),
   consumedAt: time("consumed_at"),
 }, (t) => [
-  check("billing_checkout_intent_plan", sql`${t.plan} in ('plus','pro')`),
+  check("billing_checkout_intent_plan", sql`${t.plan} in ('plus','pro','coach')`),
   index("billing_checkout_intents_user_idx").on(t.userId, t.createdAt),
 ]);
 

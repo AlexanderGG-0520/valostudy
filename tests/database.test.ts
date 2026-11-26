@@ -57,19 +57,19 @@ beforeEach(async () => {
   state.parts.mockResolvedValue([{ PartNumber: 1, ETag: "etag", Size: input.video.size }]);
   state.complete.mockResolvedValue({});
 });
-it("grants the designated developer account Pro without a Stripe subscription", async () => {
+it("grants the designated developer account Coach without a Stripe subscription", async () => {
   await database.update(schema.user).set({ email: "uket.panda.1st@gmail.com" })
     .where(eq(schema.user.id, "owner"));
 
-  expect(await currentPlan("owner")).toBe("pro");
+  expect(await currentPlan("owner")).toBe("coach");
   expect(await billingStatus("owner")).toMatchObject({
-    plan: "pro",
+    plan: "coach",
     entitlementSource: "developer",
     subscription: null,
   });
 
   const study = await createStudy("owner", { ...input, processing: { fps: 5 as const } });
-  expect(study.plan).toBe("pro");
+  expect(study.plan).toBe("coach");
 });
 
 it("binds Payment Link checkout to the authenticated user and activates the matching plan", async () => {
@@ -85,6 +85,8 @@ it("binds Payment Link checkout to the authenticated user and activates the matc
     S3_SECRET_KEY: "miniosecret",
     STRIPE_SECRET_KEY: "sk_test_placeholder",
     STRIPE_WEBHOOK_SECRET: "whsec_test",
+    STRIPE_PLUS_PRICE_ID: "price_plus",
+    STRIPE_PRO_PRICE_ID: "price_pro",
     STRIPE_PLUS_PAYMENT_LINK_URL: "https://buy.stripe.com/plus_test",
     STRIPE_PRO_PAYMENT_LINK_URL: "https://buy.stripe.com/pro_test",
   };
@@ -116,7 +118,7 @@ it("binds Payment Link checkout to the authenticated user and activates the matc
           current_period_end: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
           cancel_at_period_end: false,
           metadata: {},
-          items: { data: [] },
+          items: { data: [{ price: { id: "price_plus" } }] },
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
       throw new Error(`Unexpected Stripe URL: ${url}`);
@@ -165,6 +167,8 @@ it("does not grant Pro when a Pro checkout intent is paid through the Plus Payme
     S3_SECRET_KEY: "miniosecret",
     STRIPE_SECRET_KEY: "sk_test_placeholder",
     STRIPE_WEBHOOK_SECRET: "whsec_test",
+    STRIPE_PLUS_PRICE_ID: "price_plus",
+    STRIPE_PRO_PRICE_ID: "price_pro",
     STRIPE_PLUS_PAYMENT_LINK_URL: "https://buy.stripe.com/plus_test",
     STRIPE_PRO_PAYMENT_LINK_URL: "https://buy.stripe.com/pro_test",
   };
@@ -270,7 +274,7 @@ it("issues Pro API keys once, stores only a hash, authenticates, and revokes the
   await expect(apiOwner(request)).rejects.toMatchObject({ status: 401 });
 });
 
-it("gates Pro Coach Workspace, assigns completed Studies, and preserves longitudinal history", async () => {
+it("gates Coach Workspace, assigns completed Studies, and preserves longitudinal history", async () => {
   const study = await createStudy("owner", input);
   await database.update(schema.studies).set({
     status: "completed",
@@ -282,10 +286,17 @@ it("gates Pro Coach Workspace, assigns completed Studies, and preserves longitud
 
   await database.insert(schema.billingSubscriptions).values({
     userId: "owner",
-    plan: "pro",
+    plan: "coach",
     status: "active",
     currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   });
+
+  await database.update(schema.billingSubscriptions).set({ plan: "pro" })
+    .where(eq(schema.billingSubscriptions.userId, "owner"));
+  await expect(createClient("owner", { displayName: "Player A" }))
+    .rejects.toMatchObject({ status: 403 });
+  await database.update(schema.billingSubscriptions).set({ plan: "coach" })
+    .where(eq(schema.billingSubscriptions.userId, "owner"));
 
   const client = await createClient("owner", {
     displayName: "Player A",

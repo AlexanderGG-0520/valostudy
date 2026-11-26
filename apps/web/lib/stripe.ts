@@ -53,9 +53,12 @@ async function stripeGet(path: string) {
 
 function paymentLinkUrl(plan: Exclude<Plan, "free">) {
   const c = config();
-  return plan === "plus"
-    ? c.STRIPE_PLUS_PAYMENT_LINK_URL
-    : c.STRIPE_PRO_PAYMENT_LINK_URL;
+  return { plus: c.STRIPE_PLUS_PAYMENT_LINK_URL, pro: c.STRIPE_PRO_PAYMENT_LINK_URL, coach: c.STRIPE_COACH_PAYMENT_LINK_URL }[plan];
+}
+
+function checkoutPriceId(plan: Exclude<Plan, "free">) {
+  const c = config();
+  return { plus: c.STRIPE_PLUS_PRICE_ID, pro: c.STRIPE_PRO_PRICE_ID, coach: c.STRIPE_COACH_PRICE_ID }[plan];
 }
 
 function canonicalPaymentLink(url: string) {
@@ -68,6 +71,8 @@ export async function createPaymentLinkCheckout(input: {
   email: string;
   plan: Exclude<Plan, "free">;
 }) {
+  const link = paymentLinkUrl(input.plan);
+  if (!link || !checkoutPriceId(input.plan)) throw new Error("Stripe checkout is not configured for this plan");
   const intentId = randomBytes(24).toString("base64url");
   const now = new Date();
   await db().insert(billingCheckoutIntents).values({
@@ -78,7 +83,7 @@ export async function createPaymentLinkCheckout(input: {
     expiresAt: new Date(now.getTime() + CHECKOUT_INTENT_TTL_MS),
   });
 
-  const url = new URL(paymentLinkUrl(input.plan));
+  const url = new URL(link);
   url.searchParams.set("client_reference_id", intentId);
   url.searchParams.set("prefilled_email", input.email);
   return url.toString();
@@ -154,13 +159,15 @@ function objectId(value: string | { id: string } | null | undefined) {
 }
 
 function planFromSubscription(subscription: z.infer<typeof subscriptionSchema>): Exclude<Plan, "free"> | null {
-  const price = subscription.items?.data[0]?.price.id;
+  const items = subscription.items?.data ?? [];
+  if (items.length !== 1) return null;
+  const price = items[0].price.id;
   const c = config();
-  if (price && price === c.STRIPE_PLUS_PRICE_ID) return "plus";
-  if (price && price === c.STRIPE_PRO_PRICE_ID) return "pro";
-  const metadataPlan = planSchema.safeParse(subscription.metadata.plan);
-  if (metadataPlan.success && metadataPlan.data !== "free") return metadataPlan.data;
-  return null;
+  const matches: Exclude<Plan, "free">[] = [];
+  if (price === c.STRIPE_PLUS_PRICE_ID || price === c.STRIPE_LEGACY_PLUS_PRICE_ID) matches.push("plus");
+  if (price === c.STRIPE_PRO_PRICE_ID) matches.push("pro");
+  if (price === c.STRIPE_COACH_PRICE_ID || price === c.STRIPE_LEGACY_PRO_PRICE_ID) matches.push("coach");
+  return matches.length === 1 ? matches[0] : null;
 }
 
 async function resolvePaymentLinkCheckout(session: z.infer<typeof checkoutSchema>) {
@@ -176,13 +183,19 @@ async function resolvePaymentLinkCheckout(session: z.infer<typeof checkoutSchema
     await stripeGet(`/payment_links/${encodeURIComponent(paymentLinkId)}`),
   );
   const expectedUrl = paymentLinkUrl(intent.plan);
-  if (!paymentLink.active || canonicalPaymentLink(paymentLink.url) !== canonicalPaymentLink(expectedUrl))
+  if (!expectedUrl || !paymentLink.active || canonicalPaymentLink(paymentLink.url) !== canonicalPaymentLink(expectedUrl))
     return { invalid: true as const };
 
   const subscriptionId = objectId(session.subscription);
   const subscription = subscriptionId
     ? subscriptionSchema.parse(await stripeGet(`/subscriptions/${encodeURIComponent(subscriptionId)}`))
     : null;
+
+  if (!subscription || subscription.items?.data.length !== 1
+    || subscription.items.data[0].price.id !== checkoutPriceId(intent.plan)
+    || planFromSubscription(subscription) !== intent.plan
+    || objectId(subscription.customer) !== objectId(session.customer))
+    return { invalid: true as const };
 
   return {
     invalid: false as const,
@@ -258,7 +271,7 @@ export async function processStripeEvent(payload: unknown) {
           await tx.update(billingSubscriptions).set({
             stripeCustomerId: customerId,
             stripeSubscriptionId: objectId(session.subscription),
-            plan: parsedPlan.data,
+            plan: parsedPlan.data === "pro" ? "coach" : parsedPlan.data,
             updatedAt: new Date(),
           }).where(eq(billingSubscriptions.userId, userId));
         } else {
@@ -266,7 +279,7 @@ export async function processStripeEvent(payload: unknown) {
             userId,
             stripeCustomerId: customerId,
             stripeSubscriptionId: objectId(session.subscription),
-            plan: parsedPlan.data,
+            plan: parsedPlan.data === "pro" ? "coach" : parsedPlan.data,
             status: "incomplete",
           });
         }
@@ -283,7 +296,16 @@ export async function processStripeEvent(payload: unknown) {
         const [existing] = await tx.select().from(billingSubscriptions)
           .where(eq(billingSubscriptions.stripeCustomerId, customerId));
         if (!userId) userId = existing?.userId;
-        if (!plan && existing?.plan !== "free") plan = existing?.plan ?? null;
+        if (!plan && existing?.stripeSubscriptionId === subscription.id && existing.plan !== "free") {
+          // Preserve cancellation handling for a known subscription. Unknown prices
+          // on an active update must not continue granting a higher paid entitlement.
+          if (event.type === "customer.subscription.deleted") plan = existing.plan;
+          else {
+            await tx.update(billingSubscriptions).set({ status: "inactive", updatedAt: new Date() })
+              .where(eq(billingSubscriptions.userId, existing.userId));
+            return { duplicate: false, ignored: true };
+          }
+        }
       }
       if (userId && customerId && plan) {
         await tx.insert(billingSubscriptions).values({

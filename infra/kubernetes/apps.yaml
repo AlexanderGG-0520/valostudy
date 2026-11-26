@@ -8,8 +8,16 @@ data:
   S3_ENDPOINT: https://f74f93d265d7e4bd911aa44934795ab6.r2.cloudflarestorage.com
   S3_REGION: auto
   S3_BUCKET: valostudy
-  STRIPE_PLUS_PAYMENT_LINK_URL: https://buy.stripe.com/5kQbJ0gR2fp9alR1ow9IQ04
-  STRIPE_PRO_PAYMENT_LINK_URL: https://buy.stripe.com/cNi6oG58k1yj3Xtd7e9IQ05
+  # Public Stripe Price IDs verified against the live product catalog.
+  STRIPE_PLUS_PRICE_ID: price_1Ug15ECayyBPffbkR2rOyt6X
+  STRIPE_PRO_PRICE_ID: price_1Ug15YCayyBPffbkhiksTbWM
+  STRIPE_LEGACY_PLUS_PRICE_ID: price_1UICnRCayyBPffbkWigjXCmL
+  STRIPE_LEGACY_PRO_PRICE_ID: price_1UICouCayyBPffbkTpTZwjTX
+  STRIPE_COACH_PRICE_ID: price_1Ug1FDCayyBPffbkAgB4RpeF
+  STRIPE_PLUS_PAYMENT_LINK_URL: https://buy.stripe.com/6oUdR8cAM90L3Xt4AI9IQ06
+  STRIPE_PRO_PAYMENT_LINK_URL: https://buy.stripe.com/14A7sK44gel5dy3c3a9IQ09
+  STRIPE_COACH_PAYMENT_LINK_URL: https://buy.stripe.com/fZu5kC9oAgtdctZ7MU9IQ08
+  # Stripe API keys and webhook secrets remain in valostudy-secrets.
   WORKER_FFMPEG_THREADS: "4"
   WORKER_FFMPEG_PROCESSES: "2"
   WORKER_FRAME_UPLOAD_CONCURRENCY: "8"

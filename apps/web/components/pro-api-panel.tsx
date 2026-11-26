@@ -56,7 +56,7 @@ export function ProApiPanel() {
     return () => { active = false; };
   }, [sessionUserId]);
 
-  if (!sessionUserId || plan !== "pro") return null;
+  if (!sessionUserId || (plan !== "pro" && plan !== "coach")) return null;
 
   async function createKey() {
     setBusy(true);
@@ -116,8 +116,10 @@ export function ProApiPanel() {
       <code>GET /api/v1/studies</code>
       <code>GET /api/v1/studies/:id/manifest</code>
       <code>GET /api/v1/studies/:id/canonical</code>
-      <code>GET /api/v1/clients</code>
-      <code>GET /api/v1/clients/:id/manifest</code>
+      {plan === "coach" && <>
+        <code>GET /api/v1/clients</code>
+        <code>GET /api/v1/clients/:id/manifest</code>
+      </>}
     </div>
 
     {secret && <div className="api-secret">

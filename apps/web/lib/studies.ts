@@ -324,8 +324,8 @@ async function assertUsageAvailable(
 
   if (limits.rollingStudyLimit !== null && recent.length >= limits.rollingStudyLimit) {
     const next = new Date(recent[0].consumedAt.getTime() + limits.rollingWindowDays! * DAY);
-    throw new HttpError(429, plan === "pro"
-      ? "Pro fair-use limit reached; contact support if this is legitimate high-volume use"
+    throw new HttpError(429, plan === "coach"
+      ? "Coach fair-use limit reached; contact support if this is legitimate high-volume use"
       : `Weekly Study limit reached until ${next.toISOString()}`);
   }
 }

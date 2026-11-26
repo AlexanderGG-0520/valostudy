@@ -11,7 +11,7 @@ export const processingProgressSchema = z.object({
   totalFrames: z.number().int().positive().nullable().default(null),
   startedAt: z.iso.datetime().nullable().default(null),
 });
-export const planSchema = z.enum(["free", "plus", "pro"]);
+export const planSchema = z.enum(["free", "plus", "pro", "coach"]);
 export type Plan = z.infer<typeof planSchema>;
 
 const GiB = 1024 ** 3;
@@ -36,7 +36,7 @@ export const PLAN_LIMITS = {
   },
   plus: {
     label: "Plus",
-    priceUsdMonthly: 20,
+    priceUsdMonthly: 4.99,
     maxUploadBytes: 32 * GiB,
     maxVideoSeconds: 2 * 60 * 60,
     maxFps: 2,
@@ -45,15 +45,32 @@ export const PLAN_LIMITS = {
     queuePriority: 5,
     cooldownHours: null,
     rollingWindowDays: 7,
-    rollingStudyLimit: 30,
-    publicStudyLimitLabel: "30 Studies / rolling 7 days",
-    compareLimit: 20,
+    rollingStudyLimit: 15,
+    publicStudyLimitLabel: "15 Studies / rolling 7 days",
+    compareLimit: 10,
     clientLimit: 0,
     apiAccess: false,
   },
   pro: {
     label: "Pro",
-    priceUsdMonthly: 200,
+    priceUsdMonthly: 12.99,
+    maxUploadBytes: 64 * GiB,
+    maxVideoSeconds: 4 * 60 * 60,
+    maxFps: 5,
+    maxFrames: 72000,
+    retentionDays: 365,
+    queuePriority: 3,
+    cooldownHours: null,
+    rollingWindowDays: 7,
+    rollingStudyLimit: 60,
+    publicStudyLimitLabel: "60 Studies / rolling 7 days",
+    compareLimit: 50,
+    clientLimit: 0,
+    apiAccess: true,
+  },
+  coach: {
+    label: "Coach",
+    priceUsdMonthly: 49.99,
     maxUploadBytes: 64 * GiB,
     maxVideoSeconds: 4 * 60 * 60,
     maxFps: 5,
@@ -62,7 +79,7 @@ export const PLAN_LIMITS = {
     queuePriority: 1,
     cooldownHours: null,
     rollingWindowDays: 7,
-    // Internal abuse ceiling. The product UI presents Pro as Unlimited.
+    // Internal abuse ceiling. The product UI presents Coach as Unlimited.
     rollingStudyLimit: 500,
     publicStudyLimitLabel: "Unlimited Studies (fair use)",
     compareLimit: 100,
@@ -91,11 +108,11 @@ export function planLimits(plan: Plan) {
   return PLAN_LIMITS[plan];
 }
 
-export const MAX_UPLOAD_BYTES = PLAN_LIMITS.pro.maxUploadBytes;
+export const MAX_UPLOAD_BYTES = PLAN_LIMITS.coach.maxUploadBytes;
 export const PART_BYTES = 16 * 1024 ** 2;
 export const MAX_UPLOAD_PARTS = Math.ceil(MAX_UPLOAD_BYTES / PART_BYTES);
-export const MAX_VIDEO_SECONDS = PLAN_LIMITS.pro.maxVideoSeconds;
-export const MAX_EXTRACTED_FRAMES = PLAN_LIMITS.pro.maxFrames;
+export const MAX_VIDEO_SECONDS = PLAN_LIMITS.coach.maxVideoSeconds;
+export const MAX_EXTRACTED_FRAMES = PLAN_LIMITS.coach.maxFrames;
 
 export const gameSchema = z.enum(["valorant", "league_of_legends"]);
 export type Game = z.infer<typeof gameSchema>;

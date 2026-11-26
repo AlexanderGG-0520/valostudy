@@ -87,7 +87,7 @@ export function StudyLibrary() {
       <p className="section-copy">
         最近のStudyを50件まで表示します。
         {data.compareLimit > 0
-          ? ` ${data.plan === "plus" ? "Plus" : "Pro"}では最大${data.compareLimit}件を1つの比較manifestにまとめられます。`
+          ? ` ${data.plan === "plus" ? "Plus" : data.plan === "coach" ? "Coach" : "Pro"}では最大${data.compareLimit}件を1つの比較manifestにまとめられます。`
           : " Study comparisonはPlusから利用できます。"}
       </p>
     </div>

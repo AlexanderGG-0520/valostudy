@@ -26,49 +26,30 @@ type BillingStatus = {
   } | null;
 };
 
-const planCopy: Record<Plan, { kicker: string; description: string; features: string[] }> = {
-  free: {
-    kicker: "START HERE",
-    description: "週末だけではなく、日常的に試せる無料枠。",
-    features: [
-      "1 Study / 6時間クールダウン",
-      "最大1 FPS · 2時間",
-      "最大16 GiB",
-      "フレーム30日保持",
-      "Public / Private",
-    ],
-  },
-  plus: {
-    kicker: "FOR PLAYERS",
-    description: "日常的にランクを振り返る個人プレイヤー向け。",
-    features: [
-      "30 Studies / rolling 7 days",
-      "最大2 FPS · 2時間",
-      "最大32 GiB",
-      "フレーム1年保持",
-      "最大20 Study比較",
-      "Priority processing",
-    ],
-  },
-  pro: {
-    kicker: "HIGH VOLUME",
-    description: "コーチングや大量VOD処理まで想定した最上位枠。",
-    features: [
-      "Unlimited Studies*",
-      "最大5 FPS · 4時間",
-      "最大64 GiB",
-      "フレーム保持期限なし",
-      "最大100 Study比較",
-      "Coach Workspace · 最大100 clients",
-      "Bearer API access",
-      "Highest-priority processing",
-    ],
-  },
+const planCopy: Record<Plan, { kicker: string; description: string }> = {
+  free: { kicker: "START HERE", description: "日常的に試せる無料枠。" },
+  plus: { kicker: "FOR PLAYERS", description: "個人プレイヤー向けの振り返り。" },
+  pro: { kicker: "HIGH VOLUME", description: "高密度のVOD分析と外部ツール連携。" },
+  coach: { kicker: "FOR COACHES", description: "複数プレイヤーの継続的なコーチング。" },
 };
 
+function features(plan: Plan) {
+  const limits = PLAN_LIMITS[plan];
+  return [
+    limits.publicStudyLimitLabel,
+    `最大${limits.maxFps} FPS · ${limits.maxVideoSeconds / 3600}時間`,
+    `最大${limits.maxUploadBytes / 1024 ** 3} GiB · ${limits.maxFrames.toLocaleString("en-US")} frames`,
+    limits.retentionDays === null ? "フレーム保持期限なし" : `フレーム${limits.retentionDays}日保持`,
+    "Public / Private",
+    ...(limits.compareLimit ? [`最大${limits.compareLimit} Study比較`] : []),
+    ...(limits.clientLimit ? [`Coach Workspace · 最大${limits.clientLimit} clients`] : []),
+    ...(limits.apiAccess ? ["Bearer API access"] : []),
+    ...(plan !== "free" ? [plan === "coach" ? "Highest-priority processing" : "Priority processing"] : []),
+  ];
+}
+
 function price(plan: Plan) {
-  if (plan === "free") return "$0";
-  return plan === "plus" ? "$20" : "$200";
+  return `${PLAN_LIMITS[plan].priceUsdMonthly}`;
 }
 
 function formatDate(value: string | null) {
@@ -138,7 +119,7 @@ export function BillingPanel() {
     window.location.assign(data.url);
   }
 
-  async function checkout(plan: "plus" | "pro") {
+  async function checkout(plan: Exclude<Plan, "free">) {
     setBusy(plan);
     try {
       await post("/api/billing/checkout", { plan });
@@ -171,8 +152,8 @@ export function BillingPanel() {
           <p>
             {currentBilling.plan === "free" && !currentBilling.usage.canCreate && currentBilling.usage.nextAvailableAt
               ? `次のStudy: ${formatDate(currentBilling.usage.nextAvailableAt)}`
-              : currentBilling.plan === "plus"
-                ? `${currentBilling.usage.used} / 30 used · rolling 7 days`
+              : currentBilling.usage.displayLimit !== null
+                ? `${currentBilling.usage.used} / ${currentBilling.usage.displayLimit} used · rolling 7 days`
                 : currentBilling.usage.publicLimitLabel}
           </p>
           {currentBilling.entitlementSource === "developer"
@@ -192,7 +173,7 @@ export function BillingPanel() {
     </div>
 
     <div className="pricing-grid">
-      {(["free", "plus", "pro"] as const).map((plan) => {
+      {(["free", "plus", "pro", "coach"] as const).map((plan) => {
         const current = currentBilling?.plan === plan;
         const copy = planCopy[plan];
         return <article className={`pricing-card ${plan === "plus" ? "featured" : ""}`} key={plan}>
@@ -207,9 +188,9 @@ export function BillingPanel() {
           </div>
           <p className="pricing-description">{copy.description}</p>
           <ul>
-            {copy.features.map((feature) => <li key={feature}>{feature}</li>)}
+            {features(plan).map((feature) => <li key={feature}>{feature}</li>)}
           </ul>
-          {plan === "pro" && <Link className="pricing-doc-link" href="/docs/api">Bearer API docs →</Link>}
+          {PLAN_LIMITS[plan].apiAccess && <Link className="pricing-doc-link" href="/docs/api">Bearer API docs →</Link>}
 
           {plan === "free" ? <div className="plan-action-muted">
             {!session
@@ -220,7 +201,7 @@ export function BillingPanel() {
                   ? "プラン確認中…"
                   : "プランを確認できません"}
           </div> : currentBilling?.entitlementSource === "developer" ? <div className="plan-action-muted">
-            {current ? "Developer Pro · 課金不要" : "Developer Pro が有効"}
+            {current ? "Developer Coach · 課金不要" : "Developer Coach が有効"}
           </div> : current ? (currentBilling?.subscription?.hasCustomer ? <Button
             type="button"
             className="secondary-button pricing-button"
@@ -252,7 +233,7 @@ export function BillingPanel() {
     </div>
 
     <p className="billing-footnote">
-      * Proは通常利用ではStudy数を表示上無制限とし、自動化された異常利用にだけfair-use保護を適用します。
+      * Coachは通常利用ではStudy数を表示上無制限とし、自動化された異常利用にだけfair-use保護を適用します。
       元動画は全プランでフレーム生成後に削除されます。
       ValoStudyの料金に外部AIの利用料金は含まれません。AI分析の自動実行も行いません。
     </p>

@@ -8,7 +8,7 @@ const DAY = 24 * HOUR;
 
 // Keep privileged developer identities out of the repository as plaintext.
 // This is SHA-256(lowercase(trim(email))) for the designated developer account.
-const DEVELOPER_PRO_EMAIL_HASHES = new Set([
+const DEVELOPER_COACH_EMAIL_HASHES = new Set([
   "ead51cab682dca2e4e1a755eca29b222e26cf333b5f9d2171e0f3d0097a48064",
 ]);
 
@@ -33,9 +33,9 @@ async function resolveEntitlement(userId: string, now: Date) {
   // Developer entitlement is authoritative and must not depend on Stripe state.
   // Evaluate it before reading billing_subscriptions so the override still resolves
   // while billing infrastructure is being migrated or recovered.
-  if (account && DEVELOPER_PRO_EMAIL_HASHES.has(emailHash(account.email))) {
+  if (account && DEVELOPER_COACH_EMAIL_HASHES.has(emailHash(account.email))) {
     return {
-      plan: "pro" as const,
+      plan: "coach" as const,
       entitlementSource: "developer" as const,
       subscription: null,
     };
@@ -120,7 +120,7 @@ export async function billingStatus(userId: string, now = new Date()) {
       canCreate,
       nextAvailableAt,
       publicLimitLabel: limits.publicStudyLimitLabel,
-      displayLimit: plan === "pro" ? null : limits.rollingStudyLimit,
+      displayLimit: plan === "coach" ? null : limits.rollingStudyLimit,
     },
     subscription: subscription ? {
       status: subscription.status,

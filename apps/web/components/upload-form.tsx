@@ -485,7 +485,7 @@ export function UploadForm() {
               <option value="0.5">2秒ごと · 推奨</option>
               <option value="1">1秒ごと · 高密度</option>
               {limits.maxFps >= 2 && <option value="2">0.5秒ごと · Plus high density</option>}
-              {limits.maxFps >= 5 && <option value="5">0.2秒ごと · Pro maximum</option>}
+              {limits.maxFps >= 5 && <option value="5">0.2秒ごと · Pro / Coach maximum</option>}
             </select>
             <span className="field-hint">このプランは最大 {limits.maxFps} FPS / {limits.maxFrames.toLocaleString()} フレーム。</span>
           </label>
