@@ -11,9 +11,9 @@ export async function POST(request: Request) {
     const userId = await owner(request);
     const entitlement = await billingStatus(userId);
     if (entitlement.entitlementSource === "developer")
-      throw new HttpError(409, "Developer Pro entitlement is already active and does not require billing");
+      throw new HttpError(409, "Developer Coach entitlement is already active and does not require billing");
 
-    const { plan } = z.object({ plan: z.enum(["plus", "pro"]) }).parse(await jsonBody(request));
+    const { plan } = z.object({ plan: z.enum(["plus", "pro", "coach"]) }).parse(await jsonBody(request));
     const [account] = await db().select().from(user).where(eq(user.id, userId));
     if (!account) throw new HttpError(404, "Account not found");
     const [billing] = await db().select().from(billingSubscriptions)

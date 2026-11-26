@@ -60,7 +60,7 @@ export function CoachWorkspace() {
       const billing = await response.json() as { plan: Plan };
       if (!active) return;
       setPlan(billing.plan);
-      if (billing.plan !== "pro") return;
+      if (billing.plan !== "coach") return;
       const [clientResponse, studyResponse] = await Promise.all([
         fetch("/api/clients", { cache: "no-store" }),
         fetch("/api/studies", { cache: "no-store" }),
@@ -81,7 +81,7 @@ export function CoachWorkspace() {
     return () => { active = false; };
   }, [sessionUserId]);
 
-  if (!sessionUserId || plan !== "pro") return null;
+  if (!sessionUserId || plan !== "coach") return null;
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -10,7 +10,7 @@ import { HttpError } from "./http";
 async function requireWorkspace(ownerId: string) {
   const entitlement = await billingStatus(ownerId);
   if (!PLAN_LIMITS[entitlement.plan].clientLimit)
-    throw new HttpError(403, "Coach Workspace requires Pro");
+    throw new HttpError(403, "Coach Workspace requires Coach");
   return PLAN_LIMITS[entitlement.plan].clientLimit;
 }
 
@@ -41,7 +41,7 @@ export async function createClient(
   const limit = await requireWorkspace(ownerId);
   const existing = await db().select({ id: coachClients.id }).from(coachClients)
     .where(eq(coachClients.ownerId, ownerId));
-  if (existing.length >= limit) throw new HttpError(409, `Pro Coach Workspace supports up to ${limit} clients`);
+  if (existing.length >= limit) throw new HttpError(409, `Coach Workspace supports up to ${limit} clients`);
 
   return insertWithStudyId(async (id) => {
     const [row] = await db().insert(coachClients).values({
